@@ -37,6 +37,13 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Claude
+claude.md
+to_do.md
+to_do/
+context_record/
+.claude/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -127,4 +134,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# PyCharm
 .idea
+.docx
