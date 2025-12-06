@@ -11,7 +11,7 @@
         "step": {
             "user": {
                 "data": {
-                    "host": "Hostname / IP address",
+                    "host": "Hostname / IP Address",
                     "protocol": "Protocol",
                     "model_family": "Inverter Family (optional)"
                 },
@@ -53,6 +53,84 @@
             },
               "fast_charging_soc": {
                 "name": "Fast charging SoC"
+            },
+            "fixed_reactive_power": {
+                "name": "Fixed reactive power"
+            },
+            "eco_mode_1_param1": {
+                "name": "Eco mode group 1 parameter 1"
+            },
+            "eco_mode_1_param2": {
+                "name": "Eco mode group 1 parameter 2"
+            },
+            "eco_mode_1_param3": {
+                "name": "Eco mode group 1 parameter 3"
+            },
+            "eco_mode_2_param1": {
+                "name": "Eco mode group 2 parameter 1"
+            },
+            "eco_mode_2_param2": {
+                "name": "Eco mode group 2 parameter 2"
+            },
+            "eco_mode_2_param3": {
+                "name": "Eco mode group 2 parameter 3"
+            },
+            "eco_mode_3_param1": {
+                "name": "Eco mode group 3 parameter 1"
+            },
+            "eco_mode_3_param2": {
+                "name": "Eco mode group 3 parameter 2"
+            },
+            "eco_mode_3_param3": {
+                "name": "Eco mode group 3 parameter 3"
+            },
+            "eco_mode_4_param1": {
+                "name": "Eco mode group 4 parameter 1"
+            },
+            "eco_mode_4_param2": {
+                "name": "Eco mode group 4 parameter 2"
+            },
+            "eco_mode_4_param3": {
+                "name": "Eco mode group 4 parameter 3"
+            },
+            "eco_mode_5_param1": {
+                "name": "Eco mode group 5 parameter 1"
+            },
+            "eco_mode_5_param2": {
+                "name": "Eco mode group 5 parameter 2"
+            },
+            "eco_mode_5_param3": {
+                "name": "Eco mode group 5 parameter 3"
+            },
+            "eco_mode_6_param1": {
+                "name": "Eco mode group 6 parameter 1"
+            },
+            "eco_mode_6_param2": {
+                "name": "Eco mode group 6 parameter 2"
+            },
+            "eco_mode_6_param3": {
+                "name": "Eco mode group 6 parameter 3"
+            },
+            "eco_mode_7_param1": {
+                "name": "Eco mode group 7 parameter 1"
+            },
+            "eco_mode_7_param2": {
+                "name": "Eco mode group 7 parameter 2"
+            },
+            "eco_mode_7_param3": {
+                "name": "Eco mode group 7 parameter 3"
+            },
+            "peak_shaving_param1": {
+                "name": "Peak shaving parameter 1"
+            },
+            "peak_shaving_param2": {
+                "name": "Peak shaving parameter 2"
+            },
+            "peak_shaving_param3": {
+                "name": "Peak shaving parameter 3"
+            },
+            "pcs_powersave_mode": {
+                "name": "PCS powersave mode"
             }
         },
         "select": {
@@ -64,7 +142,7 @@
                     "eco_charge": "Eco charge mode",
                     "eco_discharge": "Eco discharge mode",
                     "general": "General mode",
-                    "off_grid": "Off-grid mode",
+                    "off_grid": "Off grid mode",
                     "peak_shaving": "Peak shaving mode",
                     "self_use": "Self Use mode"
                 }
@@ -94,6 +172,12 @@
             },
             "dod_holding_switch": {
                 "name": "DOD holding"
+            },
+            "fixed_q_power_flag": {
+                "name": "Fixed Q power flag"
+            },
+            "fixed_power_factor_enable": {
+                "name": "Fixed power factor enable"
             }
         }
     },

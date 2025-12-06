@@ -58,11 +58,26 @@ SWITCHES = (
         setting="backup_supply",
     ),
     GoodweSwitchEntityDescription(
+        key="fixed_q_power_flag",
+        translation_key="fixed_q_power_flag",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="fixed_q_power_flag",
+    ),
+    GoodweSwitchEntityDescription(
+        key="fixed_power_factor_enable",
+        translation_key="fixed_power_factor_enable",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="fixed_power_factor_enable",
+    ),
+    GoodweSwitchEntityDescription(
         key="dod_holding_switch",
         translation_key="dod_holding_switch",
         entity_category=EntityCategory.CONFIG,
         device_class=SwitchDeviceClass.SWITCH,
         setting="dod_holding",
+
     ),
 )
 
