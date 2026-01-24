@@ -44,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bo
     model_family = entry.options.get(CONF_MODEL_FAMILY, entry.data[CONF_MODEL_FAMILY])
     network_retries = entry.options.get(CONF_NETWORK_RETRIES, DEFAULT_NETWORK_RETRIES)
     network_timeout = entry.options.get(CONF_NETWORK_TIMEOUT, DEFAULT_NETWORK_TIMEOUT)
-    modbus_id = entry.options.get(CONF_MODBUS_ID, DEFAULT_MODBUS_ID)
+    modbus_id = entry.options.get(CONF_MODBUS_ID, entry.data.get(CONF_MODBUS_ID, DEFAULT_MODBUS_ID))
 
     # Connect to Goodwe inverter
     try:

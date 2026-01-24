@@ -39,6 +39,7 @@ CONFIG_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PROTOCOL, default="UDP"): vol.In(PROTOCOL_CHOICES),
         vol.Required(CONF_MODEL_FAMILY, default="none"): str,
+        vol.Optional(CONF_MODBUS_ID, default=DEFAULT_MODBUS_ID): int,
     }
 )
 OPTIONS_SCHEMA = vol.Schema(
@@ -127,24 +128,28 @@ class GoodweFlowHandler(ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST]
             protocol = user_input[CONF_PROTOCOL]
             model_family = user_input[CONF_MODEL_FAMILY]
+            modbus_id = user_input.get(CONF_MODBUS_ID, DEFAULT_MODBUS_ID)
             port = 502 if protocol == "TCP" else 8899
 
             try:
                 inverter = await connect(
-                    host=host, port=port, family=model_family, retries=10
+                    host=host, port=port, family=model_family, comm_addr=modbus_id, retries=10
                 )
             except InverterError:
                 errors[CONF_HOST] = "connection_error"
             else:
-                await self.async_set_unique_id(inverter.serial_number)
+                # Include modbus_id in unique_id to allow multiple inverters on same IP
+                unique_id = f"{inverter.serial_number}_{modbus_id}"
+                await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(
-                    title=DEFAULT_NAME,
+                    title=f"{DEFAULT_NAME} ({modbus_id})" if modbus_id != 0 else DEFAULT_NAME,
                     data={
                         CONF_HOST: host,
                         CONF_PROTOCOL: protocol,
                         CONF_MODEL_FAMILY: type(inverter).__name__,
+                        CONF_MODBUS_ID: modbus_id,
                     },
                 )
 
