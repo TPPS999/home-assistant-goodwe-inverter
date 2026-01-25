@@ -1,19 +1,59 @@
 """The Goodwe inverter component."""
 
+import json
 import logging
+import os
+import re
 from goodwe import InverterError, connect
 from homeassistant.config_entries import ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
-# Log goodwe library version on import
+# Log goodwe library version on import and verify it matches manifest.json
 try:
     import goodwe
+    actual_version = getattr(goodwe, '__version__', 'unknown')
     _LOGGER.warning("GoodWe library version: %s, location: %s",
-                    getattr(goodwe, '__version__', 'unknown'),
+                    actual_version,
                     goodwe.__file__)
+
+    # Parse expected version from manifest.json
+    manifest_path = os.path.join(os.path.dirname(__file__), 'manifest.json')
+    try:
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            manifest = json.load(f)
+            requirements = manifest.get('requirements', [])
+            expected_version = None
+
+            # Extract version from requirements like "goodwe @ git+...@v0.5.4"
+            for req in requirements:
+                if 'goodwe' in req.lower():
+                    match = re.search(r'@v([\d.]+)', req)
+                    if match:
+                        expected_version = match.group(1)
+                        break
+
+            if expected_version and actual_version != expected_version:
+                _LOGGER.error(
+                    "GoodWe library version mismatch! Expected %s, got %s. "
+                    "Please update the library using shell_command service.",
+                    expected_version, actual_version
+                )
+                # Store version mismatch info for later notification
+                # We'll create persistent notification in async_setup_entry
+                _version_mismatch = {
+                    'expected': expected_version,
+                    'actual': actual_version
+                }
+            elif expected_version:
+                _LOGGER.info("GoodWe library version verified: %s", actual_version)
+                _version_mismatch = None
+    except Exception as e:
+        _LOGGER.warning("Could not verify goodwe library version from manifest: %s", e)
+        _version_mismatch = None
 except Exception as e:
     _LOGGER.warning("Could not determine goodwe library version: %s", e)
+    _version_mismatch = None
 from homeassistant.const import CONF_HOST, CONF_PROTOCOL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -38,6 +78,32 @@ from .services import async_setup_services, async_unload_services
 async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bool:
     """Set up the Goodwe components from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Check for version mismatch and create persistent notification
+    # TODO: In future, replace with repair issue for better UX
+    if _version_mismatch is not None:
+        expected = _version_mismatch['expected']
+        actual = _version_mismatch['actual']
+
+        update_command = (
+            f"pip3 uninstall -y goodwe && "
+            f"pip3 cache purge && "
+            f"pip3 install --no-cache-dir --force-reinstall "
+            f"git+https://github.com/TPPS999/goodwe_lib.git@v{expected}"
+        )
+
+        hass.components.persistent_notification.async_create(
+            title="GoodWe Library Version Mismatch",
+            message=(
+                f"**Expected version:** {expected}\n\n"
+                f"**Installed version:** {actual}\n\n"
+                f"Please update the library using your shell_command service:\n\n"
+                f"```\n{update_command}\n```\n\n"
+                f"Then restart Home Assistant."
+            ),
+            notification_id=f"goodwe_version_mismatch_{entry.entry_id}",
+        )
+
     host = entry.options.get(CONF_HOST, entry.data[CONF_HOST])
     protocol = entry.options.get(CONF_PROTOCOL, entry.data.get(CONF_PROTOCOL, "UDP"))
     keep_alive = entry.options.get(CONF_KEEP_ALIVE, False)
