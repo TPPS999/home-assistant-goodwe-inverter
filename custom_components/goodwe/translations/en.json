@@ -1,202 +1,129 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured",
-            "already_in_progress": "Configuration flow is already in progress"
-        },
-        "error": {
-            "connection_error": "Failed to connect"
-        },
+  "config": {
+    "abort": {
+      "already_configured": "Device is already configured",
+      "already_in_progress": "Configuration flow is already in progress"
+    },
+    "error": {
+      "connection_error": "Failed to connect"
+    },
     "flow_title": "GoodWe",
-        "step": {
-            "user": {
-                "data": {
-                    "host": "Hostname / IP Address",
-                    "protocol": "Protocol",
-                    "model_family": "Inverter Family (optional)"
-                },
-                "description": "Connect to inverter",
-                "title": "GoodWe inverter"
-            }
-        }
-    },
-    "entity": {
-        "button": {
-            "synchronize_clock": {
-                "name": "Synchronize inverter clock"
-            },
-            "start_inverter": {
-                "name": "Start inverter"
-            },
-            "stop_inverter": {
-                "name": "Stop inverter"
-            }
+    "step": {
+      "user": {
+        "data": {
+          "host": "Hostname / IP Address",
+          "protocol": "Protocol",
+          "model_family": "Inverter Family (optional)"
         },
-        "number": {
-            "battery_discharge_depth": {
-                "name": "Depth of discharge (on-grid)"
-            },
-            "battery_discharge_depth_offline": {
-                "name": "Depth of discharge (backup)"
-            },
-            "eco_mode_power": {
-                "name": "Eco mode power"
-            },
-            "eco_mode_soc": {
-                "name": "Eco mode SoC"
-            },
-            "grid_export_limit": {
-                "name": "Grid export limit"
-            },
-            "fast_charging_power": {
-                "name": "Fast charging power"
-            },
-              "fast_charging_soc": {
-                "name": "Fast charging SoC"
-            },
-            "fixed_reactive_power": {
-                "name": "Fixed reactive power"
-            },
-            "eco_mode_1_param1": {
-                "name": "Eco mode group 1 parameter 1"
-            },
-            "eco_mode_1_param2": {
-                "name": "Eco mode group 1 parameter 2"
-            },
-            "eco_mode_1_param3": {
-                "name": "Eco mode group 1 parameter 3"
-            },
-            "eco_mode_2_param1": {
-                "name": "Eco mode group 2 parameter 1"
-            },
-            "eco_mode_2_param2": {
-                "name": "Eco mode group 2 parameter 2"
-            },
-            "eco_mode_2_param3": {
-                "name": "Eco mode group 2 parameter 3"
-            },
-            "eco_mode_3_param1": {
-                "name": "Eco mode group 3 parameter 1"
-            },
-            "eco_mode_3_param2": {
-                "name": "Eco mode group 3 parameter 2"
-            },
-            "eco_mode_3_param3": {
-                "name": "Eco mode group 3 parameter 3"
-            },
-            "eco_mode_4_param1": {
-                "name": "Eco mode group 4 parameter 1"
-            },
-            "eco_mode_4_param2": {
-                "name": "Eco mode group 4 parameter 2"
-            },
-            "eco_mode_4_param3": {
-                "name": "Eco mode group 4 parameter 3"
-            },
-            "eco_mode_5_param1": {
-                "name": "Eco mode group 5 parameter 1"
-            },
-            "eco_mode_5_param2": {
-                "name": "Eco mode group 5 parameter 2"
-            },
-            "eco_mode_5_param3": {
-                "name": "Eco mode group 5 parameter 3"
-            },
-            "eco_mode_6_param1": {
-                "name": "Eco mode group 6 parameter 1"
-            },
-            "eco_mode_6_param2": {
-                "name": "Eco mode group 6 parameter 2"
-            },
-            "eco_mode_6_param3": {
-                "name": "Eco mode group 6 parameter 3"
-            },
-            "eco_mode_7_param1": {
-                "name": "Eco mode group 7 parameter 1"
-            },
-            "eco_mode_7_param2": {
-                "name": "Eco mode group 7 parameter 2"
-            },
-            "eco_mode_7_param3": {
-                "name": "Eco mode group 7 parameter 3"
-            },
-            "peak_shaving_param1": {
-                "name": "Peak shaving parameter 1"
-            },
-            "peak_shaving_param2": {
-                "name": "Peak shaving parameter 2"
-            },
-            "peak_shaving_param3": {
-                "name": "Peak shaving parameter 3"
-            },
-            "pcs_powersave_mode": {
-                "name": "PCS powersave mode"
-            }
-        },
-        "select": {
-            "operation_mode": {
-                "name": "Inverter operation mode",
-                "state": {
-                    "backup": "Backup mode",
-                    "eco": "Eco mode",
-                    "eco_charge": "Eco charge mode",
-                    "eco_discharge": "Eco discharge mode",
-                    "general": "General mode",
-                    "off_grid": "Off grid mode",
-                    "peak_shaving": "Peak shaving mode",
-                    "self_use": "Self Use mode"
-                }
-            }
-        },
-        "sensor": {
-            "grid_in_out_label": {
-                "state": {
-                    "0": "Idle",
-                    "1": "Exporting",
-                    "2": "Importing"
-                }
-            }
-        },
-        "switch": {
-            "grid_export_limit_switch": {
-                "name": "Grid export limit switch"
-            },
-            "fast_charging_switch": {
-                "name": "Fast charging switch"
-              },
-            "load_control": {
-                "name": "Load control"
-            },
-            "backup_supply_switch": {
-                "name": "Backup supply"
-            },
-            "dod_holding_switch": {
-                "name": "DOD holding"
-            },
-            "fixed_q_power_flag": {
-                "name": "Fixed Q power flag"
-            },
-            "fixed_power_factor_enable": {
-                "name": "Fixed power factor enable"
-            }
-        }
-    },
-    "options": {
-        "step": {
-            "init": {
-                "data": {
-                    "host": "Hostname / IP Address",
-                    "protocol": "Protocol",
-                    "keep_alive": "TCP Keep alive",
-                    "model_family": "Protocol Family [ET|DT|ES]",
-                    "scan_interval": "Scan interval (s)",
-                    "network_retries": "Network retry attempts",
-                    "network_timeout": "Network request timeout (s)"
-                },
-                "description": "Specify optional (network) settings",
-                "title": "GoodWe optional settings"
-            }
-        }
+        "description": "Connect to inverter",
+        "title": "GoodWe inverter"
+      }
     }
+  },
+  "entity": {
+    "button": {
+      "synchronize_clock": {
+        "name": "Synchronize inverter clock"
+      },
+      "start_inverter": {
+        "name": "Start inverter"
+      },
+      "stop_inverter": {
+        "name": "Stop inverter"
+      }
+    },
+    "number": {
+      "battery_discharge_depth": {
+        "name": "Depth of discharge (on-grid)"
+      },
+      "battery_discharge_depth_offline": {
+        "name": "Depth of discharge (backup)"
+      },
+      "eco_mode_power": {
+        "name": "Eco mode power"
+      },
+      "eco_mode_soc": {
+        "name": "Eco mode SoC"
+      },
+      "grid_export_limit": {
+        "name": "Grid export limit"
+      },
+      "fast_charging_power": {
+        "name": "Fast charging power"
+      },
+      "fast_charging_soc": {
+        "name": "Fast charging SoC"
+      },
+      "fixed_reactive_power": {
+        "name": "Fixed reactive power"
+      },
+      "pcs_powersave_mode": {
+        "name": "PCS powersave mode"
+      }
+    },
+    "select": {
+      "operation_mode": {
+        "name": "Inverter operation mode",
+        "state": {
+          "backup": "Backup mode",
+          "eco": "Eco mode",
+          "eco_charge": "Eco charge mode",
+          "eco_discharge": "Eco discharge mode",
+          "general": "General mode",
+          "off_grid": "Off grid mode",
+          "peak_shaving": "Peak shaving mode",
+          "self_use": "Self Use mode"
+        }
+      }
+    },
+    "sensor": {
+      "grid_in_out_label": {
+        "state": {
+          "0": "Idle",
+          "1": "Exporting",
+          "2": "Importing"
+        }
+      }
+    },
+    "switch": {
+      "grid_export_limit_switch": {
+        "name": "Grid export limit switch"
+      },
+      "fast_charging_switch": {
+        "name": "Fast charging switch"
+      },
+      "load_control": {
+        "name": "Load control"
+      },
+      "backup_supply_switch": {
+        "name": "Backup supply"
+      },
+      "dod_holding_switch": {
+        "name": "DOD holding"
+      },
+      "fixed_q_power_flag": {
+        "name": "Fixed Q power flag"
+      },
+      "fixed_power_factor_enable": {
+        "name": "Fixed power factor enable"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "host": "Hostname / IP Address",
+          "protocol": "Protocol",
+          "keep_alive": "TCP Keep alive",
+          "model_family": "Protocol Family [ET|DT|ES]",
+          "scan_interval": "Scan interval (s)",
+          "network_retries": "Network retry attempts",
+          "network_timeout": "Network request timeout (s)"
+        },
+        "description": "Specify optional (network) settings",
+        "title": "GoodWe optional settings"
+      }
+    }
+  }
 }
-
