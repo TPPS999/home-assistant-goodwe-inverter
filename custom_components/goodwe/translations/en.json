@@ -59,6 +59,54 @@
       },
       "pcs_powersave_mode": {
         "name": "PCS powersave mode"
+      },
+      "tou_slot1_param1": {
+        "name": "TOU Slot 1 Parameter 1"
+      },
+      "tou_slot1_param2": {
+        "name": "TOU Slot 1 Parameter 2"
+      },
+      "tou_slot2_param1": {
+        "name": "TOU Slot 2 Parameter 1"
+      },
+      "tou_slot2_param2": {
+        "name": "TOU Slot 2 Parameter 2"
+      },
+      "tou_slot3_param1": {
+        "name": "TOU Slot 3 Parameter 1"
+      },
+      "tou_slot3_param2": {
+        "name": "TOU Slot 3 Parameter 2"
+      },
+      "tou_slot4_param1": {
+        "name": "TOU Slot 4 Parameter 1"
+      },
+      "tou_slot4_param2": {
+        "name": "TOU Slot 4 Parameter 2"
+      },
+      "tou_slot5_param1": {
+        "name": "TOU Slot 5 Parameter 1"
+      },
+      "tou_slot5_param2": {
+        "name": "TOU Slot 5 Parameter 2"
+      },
+      "tou_slot6_param1": {
+        "name": "TOU Slot 6 Parameter 1"
+      },
+      "tou_slot6_param2": {
+        "name": "TOU Slot 6 Parameter 2"
+      },
+      "tou_slot7_param1": {
+        "name": "TOU Slot 7 Parameter 1"
+      },
+      "tou_slot7_param2": {
+        "name": "TOU Slot 7 Parameter 2"
+      },
+      "tou_slot8_param1": {
+        "name": "TOU Slot 8 Parameter 1"
+      },
+      "tou_slot8_param2": {
+        "name": "TOU Slot 8 Parameter 2"
       }
     },
     "select": {

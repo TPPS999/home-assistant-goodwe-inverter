@@ -182,7 +182,41 @@ NUMBERS = (
         setter=lambda inv, val: inv.write_setting("pcs_powersave_mode", val),
         filter=lambda inv: True,
     ),
+    # TOU (Time of Use) Slot Parameters (ARM fw >= 19 for slots 1-4, >= 22 for 5-8)
+    # Param1 and Param2 for each slot (meaning depends on work week mode)
 )
+
+# Add TOU slot parameters dynamically
+_TOU_NUMBERS = []
+for slot in range(1, 9):
+    _TOU_NUMBERS.extend([
+        GoodweNumberEntityDescription(
+            key=f"tou_slot{slot}_param1",
+            translation_key=f"tou_slot{slot}_param1",
+            entity_category=EntityCategory.CONFIG,
+            native_step=1,
+            native_min_value=0,
+            native_max_value=65535,
+            getter=lambda inv, s=slot: inv.read_setting(f"tou_slot{s}_param1"),
+            mapper=lambda v: v,
+            setter=lambda inv, val, s=slot: inv.write_setting(f"tou_slot{s}_param1", val),
+            filter=lambda inv: True,
+        ),
+        GoodweNumberEntityDescription(
+            key=f"tou_slot{slot}_param2",
+            translation_key=f"tou_slot{slot}_param2",
+            entity_category=EntityCategory.CONFIG,
+            native_step=1,
+            native_min_value=0,
+            native_max_value=65535,
+            getter=lambda inv, s=slot: inv.read_setting(f"tou_slot{s}_param2"),
+            mapper=lambda v: v,
+            setter=lambda inv, val, s=slot: inv.write_setting(f"tou_slot{s}_param2", val),
+            filter=lambda inv: True,
+        ),
+    ])
+
+NUMBERS = NUMBERS + tuple(_TOU_NUMBERS)
 
 
 async def async_setup_entry(
