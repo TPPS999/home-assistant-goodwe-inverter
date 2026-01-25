@@ -223,6 +223,7 @@ class InverterSensor(CoordinatorEntity[GoodweUpdateCoordinator], SensorEntity):
             elif (
                 isinstance(sensor, (EnumBitmap4, EnumBitmap22))
                 or sensor.id_ == "timestamp"
+                or sensor.__class__.__name__ in ("TimeOfDay", "WorkWeekV2", "MonthMask")
             ):
                 self.entity_description = TEXT_SENSOR
             else:
