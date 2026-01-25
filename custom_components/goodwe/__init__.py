@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from goodwe import InverterError, connect
+from homeassistant.components.persistent_notification import async_create
 from homeassistant.config_entries import ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,8 +93,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bo
             f"git+https://github.com/TPPS999/goodwe_lib.git@v{expected}"
         )
 
-        hass.components.persistent_notification.async_create(
-            title="GoodWe Library Version Mismatch",
+        async_create(
+            hass,
             message=(
                 f"**Expected version:** {expected}\n\n"
                 f"**Installed version:** {actual}\n\n"
@@ -101,6 +102,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bo
                 f"```\n{update_command}\n```\n\n"
                 f"Then restart Home Assistant."
             ),
+            title="GoodWe Library Version Mismatch",
             notification_id=f"goodwe_version_mismatch_{entry.entry_id}",
         )
 
