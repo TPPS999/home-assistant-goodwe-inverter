@@ -16,6 +16,7 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import BaseCoordinatorEntity
 
+from .const import DOMAIN
 from .coordinator import GoodweUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,7 +135,9 @@ class InverterSwitchEntity(
         """Initialize the inverter operation mode setting entity."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{description.key}-{inverter.serial_number}"
+        # Use sensor_name_prefix (GWxxxx_) to distinguish parallel inverters
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}{description.key}-{inverter.serial_number}"
         self._attr_device_info = device_info
         self._attr_is_on = current_is_on
         self._inverter: Inverter = inverter

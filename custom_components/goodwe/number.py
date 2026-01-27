@@ -268,7 +268,9 @@ class InverterNumberEntity(NumberEntity):
     ) -> None:
         """Initialize the number inverter setting entity."""
         self.entity_description = description
-        self._attr_unique_id = f"{DOMAIN}-{description.key}-{inverter.serial_number}"
+        # Use sensor_name_prefix (GWxxxx_) to distinguish parallel inverters
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}{description.key}-{inverter.serial_number}"
         self._attr_device_info = device_info
         self._attr_native_value = (
             float(current_value) if current_value is not None else None

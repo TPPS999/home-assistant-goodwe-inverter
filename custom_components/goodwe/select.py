@@ -117,7 +117,9 @@ class InverterOperationModeEntity(SelectEntity):
     ) -> None:
         """Initialize the inverter operation mode setting entity."""
         self.entity_description = description
-        self._attr_unique_id = f"{DOMAIN}-{description.key}-{inverter.serial_number}"
+        # Use sensor_name_prefix (GWxxxx_) to distinguish parallel inverters
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}{description.key}-{inverter.serial_number}"
         self._attr_device_info = device_info
         self._attr_options = supported_options
         self._attr_current_option = current_mode
