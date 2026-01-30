@@ -78,7 +78,14 @@ SWITCHES = (
         entity_category=EntityCategory.CONFIG,
         device_class=SwitchDeviceClass.SWITCH,
         setting="dod_holding",
-
+    ),
+    GoodweSwitchEntityDescription(
+        key="peak_shaving_enabled",
+        translation_key="peak_shaving_enabled",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="peak_shaving_enabled",
+        polling_interval=30,
     ),
 )
 

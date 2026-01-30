@@ -12,7 +12,7 @@ from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfElectricCurrent, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -180,6 +180,37 @@ NUMBERS = (
         getter=lambda inv: inv.read_setting("pcs_powersave_mode"),
         mapper=lambda v: v,
         setter=lambda inv, val: inv.write_setting("pcs_powersave_mode", val),
+        filter=lambda inv: True,
+    ),
+    # Battery current limits (registers 45353, 45355)
+    GoodweNumberEntityDescription(
+        key="battery_charge_current",
+        translation_key="battery_charge_current",
+        icon="mdi:battery-charging",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=100,
+        getter=lambda inv: inv.read_setting("battery_charge_current"),
+        mapper=lambda v: v,
+        setter=lambda inv, val: inv.write_setting("battery_charge_current", val),
+        filter=lambda inv: True,
+    ),
+    GoodweNumberEntityDescription(
+        key="battery_discharge_current",
+        translation_key="battery_discharge_current",
+        icon="mdi:battery-arrow-down-outline",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=100,
+        getter=lambda inv: inv.read_setting("battery_discharge_current"),
+        mapper=lambda v: v,
+        setter=lambda inv, val: inv.write_setting("battery_discharge_current", val),
         filter=lambda inv: True,
     ),
     # TOU (Time of Use) Slot Parameters (ARM fw >= 19 for slots 1-4, >= 22 for 5-8)
