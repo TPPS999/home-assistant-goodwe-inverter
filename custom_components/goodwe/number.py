@@ -213,6 +213,36 @@ NUMBERS = (
         setter=lambda inv, val: inv.write_setting("battery_discharge_current", val),
         filter=lambda inv: True,
     ),
+    # Peak Shaving parameters (TOU Slot 8 when in peak shaving mode 0xFC)
+    GoodweNumberEntityDescription(
+        key="peak_shaving_power_slot8",
+        translation_key="peak_shaving_power_slot8",
+        icon="mdi:transmission-tower-export",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_step=0.1,
+        native_min_value=-40,
+        native_max_value=40,
+        getter=lambda inv: inv.read_setting("tou_slot8_param1"),
+        mapper=lambda v: v / 10 if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("tou_slot8_param1", int(val * 10)),
+        filter=lambda inv: True,
+    ),
+    GoodweNumberEntityDescription(
+        key="peak_shaving_soc_slot8",
+        translation_key="peak_shaving_soc_slot8",
+        icon="mdi:battery-charging-70",
+        entity_category=EntityCategory.CONFIG,
+        native_unit_of_measurement=PERCENTAGE,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=100,
+        getter=lambda inv: inv.read_setting("tou_slot8_param2"),
+        mapper=lambda v: v,
+        setter=lambda inv, val: inv.write_setting("tou_slot8_param2", val),
+        filter=lambda inv: True,
+    ),
     # TOU (Time of Use) Slot Parameters (ARM fw >= 19 for slots 1-4, >= 22 for 5-8)
     # Param1 and Param2 for each slot (meaning depends on work week mode)
 )

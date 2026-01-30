@@ -106,6 +106,18 @@
       },
       "tou_slot8_param2": {
         "name": "TOU Slot 8 Parameter 2"
+      },
+      "battery_charge_current": {
+        "name": "Battery charge current limit"
+      },
+      "battery_discharge_current": {
+        "name": "Battery discharge current limit"
+      },
+      "peak_shaving_power_slot8": {
+        "name": "Peak shaving power limit (Slot 8)"
+      },
+      "peak_shaving_soc_slot8": {
+        "name": "Peak shaving SOC (Slot 8)"
       }
     },
     "select": {
@@ -137,6 +149,9 @@
       },
       "dod_holding_switch": {
         "name": "DOD holding"
+      },
+      "peak_shaving_enabled": {
+        "name": "Peak shaving mode"
       },
       "fixed_q_power_flag": {
         "name": "Fixed Q power flag"
