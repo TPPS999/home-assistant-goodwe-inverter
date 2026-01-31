@@ -214,19 +214,21 @@ NUMBERS = (
         filter=lambda inv: True,
     ),
     # Peak Shaving parameters (TOU Slot 8 when in peak shaving mode 0xFC)
+    # Note: In parallel systems, this value is sent to EACH inverter separately,
+    # so total system power limit = value * number_of_inverters
     GoodweNumberEntityDescription(
         key="peak_shaving_power_slot8",
         translation_key="peak_shaving_power_slot8",
         icon="mdi:transmission-tower-export",
         entity_category=EntityCategory.CONFIG,
         device_class=NumberDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        native_step=0.1,
-        native_min_value=-40,
-        native_max_value=40,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_step=100,
+        native_min_value=-40000,
+        native_max_value=40000,
         getter=lambda inv: inv.read_setting("tou_slot8_param1"),
-        mapper=lambda v: v / 10 if v is not None else 0,
-        setter=lambda inv, val: inv.write_setting("tou_slot8_param1", int(val * 10)),
+        mapper=lambda v: v if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("tou_slot8_param1", int(val)),
         filter=lambda inv: True,
     ),
     GoodweNumberEntityDescription(
