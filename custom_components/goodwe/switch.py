@@ -281,3 +281,11 @@ class ObservationSwitchEntity(
             "Disabled observation sensors: %s",
             self.entity_description.attribute
         )
+
+    async def async_update(self) -> None:
+        """Get the current state from inverter attribute."""
+        self._attr_is_on = getattr(
+            self._inverter,
+            self.entity_description.attribute,
+            False
+        )
