@@ -33,3 +33,9 @@ ATTR_DEVICE_ID = "device_id"
 ATTR_ENTITY_ID = "entity_id"
 ATTR_PARAMETER = "parameter"
 ATTR_VALUE = "value"
+
+# Observation sensors switches
+OBSERVATION_33XXX = "observation_33xxx"
+OBSERVATION_38XXX = "observation_38xxx"
+OBSERVATION_48XXX = "observation_48xxx"
+OBSERVATION_55XXX = "observation_55xxx"
