@@ -16,7 +16,7 @@ PLATFORMS = [
 
 DEFAULT_NAME = "GoodWe"
 SCAN_INTERVAL = timedelta(seconds=10)
-DEFAULT_SCAN_INTERVAL = 20  # Increased for observation sensors with large data sets
+DEFAULT_SCAN_INTERVAL = 10
 DEFAULT_NETWORK_RETRIES = 10
 DEFAULT_NETWORK_TIMEOUT = 1
 DEFAULT_MODBUS_ID = 0
@@ -33,9 +33,3 @@ ATTR_DEVICE_ID = "device_id"
 ATTR_ENTITY_ID = "entity_id"
 ATTR_PARAMETER = "parameter"
 ATTR_VALUE = "value"
-
-# Observation sensors switches
-OBSERVATION_33XXX = "observation_33xxx"
-OBSERVATION_38XXX = "observation_38xxx"
-OBSERVATION_48XXX = "observation_48xxx"
-OBSERVATION_55XXX = "observation_55xxx"

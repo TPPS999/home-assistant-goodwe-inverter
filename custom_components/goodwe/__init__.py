@@ -70,10 +70,6 @@ from .const import (
     DEFAULT_NETWORK_RETRIES,
     DEFAULT_NETWORK_TIMEOUT,
     DOMAIN,
-    OBSERVATION_33XXX,
-    OBSERVATION_38XXX,
-    OBSERVATION_48XXX,
-    OBSERVATION_55XXX,
     PLATFORMS,
 )
 from .coordinator import GoodweConfigEntry, GoodweRuntimeData, GoodweUpdateCoordinator
@@ -129,12 +125,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bo
             retries=network_retries,
         )
         inverter.set_keep_alive(keep_alive)
-
-        # Restore observation sensor flags from options (for persistent state)
-        inverter._observe_33xxx = entry.options.get(OBSERVATION_33XXX, False)
-        inverter._observe_38xxx = entry.options.get(OBSERVATION_38XXX, False)
-        inverter._observe_48xxx = entry.options.get(OBSERVATION_48XXX, False)
-        inverter._observe_55xxx = entry.options.get(OBSERVATION_55XXX, False)
 
     except InverterError as err:
         raise ConfigEntryNotReady from err

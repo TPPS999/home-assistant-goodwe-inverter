@@ -169,18 +169,6 @@
       },
       "fixed_power_factor_enable": {
         "name": "Fixed power factor enable"
-      },
-      "observation_33xxx": {
-        "name": "Observation sensors 33xxx (Grid config)"
-      },
-      "observation_38xxx": {
-        "name": "Observation sensors 38xxx (Grid phase)"
-      },
-      "observation_48xxx": {
-        "name": "Observation sensors 48xxx (Slave battery)"
-      },
-      "observation_55xxx": {
-        "name": "Observation sensors 55xxx (Energy counters)"
       }
     }
   },

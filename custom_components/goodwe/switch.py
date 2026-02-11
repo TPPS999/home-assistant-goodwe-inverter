@@ -16,13 +16,7 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import BaseCoordinatorEntity
 
-from .const import (
-    DOMAIN,
-    OBSERVATION_33XXX,
-    OBSERVATION_38XXX,
-    OBSERVATION_48XXX,
-    OBSERVATION_55XXX,
-)
+from .const import DOMAIN
 from .coordinator import GoodweUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,13 +28,6 @@ class GoodweSwitchEntityDescription(SwitchEntityDescription):
 
     setting: str
     polling_interval: int = 0
-
-
-@dataclass(frozen=True, kw_only=True)
-class ObservationSwitchEntityDescription(SwitchEntityDescription):
-    """Class describing observation sensor switch entities."""
-
-    attribute: str  # The _observe_*xxx attribute name
 
 
 SWITCHES = (
@@ -102,37 +89,6 @@ SWITCHES = (
     ),
 )
 
-OBSERVATION_SWITCHES = (
-    ObservationSwitchEntityDescription(
-        key=OBSERVATION_33XXX,
-        translation_key=OBSERVATION_33XXX,
-        entity_category=EntityCategory.CONFIG,
-        device_class=SwitchDeviceClass.SWITCH,
-        attribute="_observe_33xxx",
-    ),
-    ObservationSwitchEntityDescription(
-        key=OBSERVATION_38XXX,
-        translation_key=OBSERVATION_38XXX,
-        entity_category=EntityCategory.CONFIG,
-        device_class=SwitchDeviceClass.SWITCH,
-        attribute="_observe_38xxx",
-    ),
-    ObservationSwitchEntityDescription(
-        key=OBSERVATION_48XXX,
-        translation_key=OBSERVATION_48XXX,
-        entity_category=EntityCategory.CONFIG,
-        device_class=SwitchDeviceClass.SWITCH,
-        attribute="_observe_48xxx",
-    ),
-    ObservationSwitchEntityDescription(
-        key=OBSERVATION_55XXX,
-        translation_key=OBSERVATION_55XXX,
-        entity_category=EntityCategory.CONFIG,
-        device_class=SwitchDeviceClass.SWITCH,
-        attribute="_observe_55xxx",
-    ),
-)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -162,20 +118,6 @@ async def async_setup_entry(
                     current_state == 1,
                 )
             )
-
-    # Add observation switches (always available, no read check needed)
-    for description in OBSERVATION_SWITCHES:
-        current_state = getattr(inverter, description.attribute, False)
-        entities.append(
-            ObservationSwitchEntity(
-                coordinator,
-                device_info,
-                description,
-                inverter,
-                current_state,
-                config_entry,
-            )
-        )
 
     async_add_entities(entities)
 
@@ -234,79 +176,3 @@ class InverterSwitchEntity(
                 self,
                 self.entity_description.polling_interval if self._attr_is_on else 0,
             )
-
-
-class ObservationSwitchEntity(
-    BaseCoordinatorEntity[GoodweUpdateCoordinator], SwitchEntity
-):
-    """Switch to enable/disable observation sensors for undocumented registers."""
-
-    _attr_should_poll = False
-    _attr_has_entity_name = True
-    entity_description: ObservationSwitchEntityDescription
-
-    def __init__(
-        self,
-        coordinator: GoodweUpdateCoordinator,
-        device_info: DeviceInfo,
-        description: ObservationSwitchEntityDescription,
-        inverter: Inverter,
-        current_is_on: bool,
-        config_entry: ConfigEntry,
-    ) -> None:
-        """Initialize the observation switch entity."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        # Use sensor_name_prefix (GWxxxx_) to distinguish parallel inverters
-        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
-        self._attr_unique_id = f"{DOMAIN}-{prefix}{description.key}-{inverter.serial_number}"
-        self._attr_device_info = device_info
-        self._attr_is_on = current_is_on
-        self._inverter: Inverter = inverter
-        self._config_entry = config_entry
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the observation sensors on."""
-        setattr(self._inverter, self.entity_description.attribute, True)
-        self._attr_is_on = True
-
-        # Save state to config entry options for persistence
-        options = dict(self._config_entry.options)
-        options[self.entity_description.key] = True
-        self.hass.config_entries.async_update_entry(
-            self._config_entry,
-            options=options
-        )
-
-        self.async_write_ha_state()
-        _LOGGER.info(
-            "Enabled observation sensors: %s (requires HA restart to see new entities)",
-            self.entity_description.attribute
-        )
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the observation sensors off."""
-        setattr(self._inverter, self.entity_description.attribute, False)
-        self._attr_is_on = False
-
-        # Save state to config entry options for persistence
-        options = dict(self._config_entry.options)
-        options[self.entity_description.key] = False
-        self.hass.config_entries.async_update_entry(
-            self._config_entry,
-            options=options
-        )
-
-        self.async_write_ha_state()
-        _LOGGER.info(
-            "Disabled observation sensors: %s (requires HA restart to remove entities)",
-            self.entity_description.attribute
-        )
-
-    async def async_update(self) -> None:
-        """Get the current state from inverter attribute."""
-        self._attr_is_on = getattr(
-            self._inverter,
-            self.entity_description.attribute,
-            False
-        )
