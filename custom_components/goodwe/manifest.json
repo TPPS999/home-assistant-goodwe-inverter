@@ -11,6 +11,6 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mletenay/home-assistant-goodwe-inverter/issues",
   "loggers": ["goodwe"],
-  "requirements": ["goodwe @ git+https://github.com/TPPS999/goodwe_lib.git@v0.7.1"],
-  "version": "0.9.9.71"
+  "requirements": ["goodwe @ git+https://github.com/TPPS999/goodwe_lib.git@v0.7.2"],
+  "version": "0.9.9.72"
 }
