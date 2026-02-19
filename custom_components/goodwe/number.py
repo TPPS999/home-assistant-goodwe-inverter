@@ -246,6 +246,37 @@ NUMBERS = (
         setter=lambda inv, val: inv.write_setting("tou_slot8_param2", int(val)),
         filter=lambda inv: True,
     ),
+    # Battery FeedPower Offset (ARM fw >= 19) - offset applied to battery feed power in W
+    GoodweNumberEntityDescription(
+        key="bat_feedpower_offset",
+        translation_key="bat_feedpower_offset",
+        icon="mdi:battery-arrow-up",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=10000,
+        getter=lambda inv: inv.read_setting("bat_feedpower_offset"),
+        mapper=lambda v: v if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("bat_feedpower_offset", int(val)),
+        filter=lambda inv: True,
+    ),
+    # AC Active Current Limit Flag (2025 firmware) - limit AC active current
+    # Special values: 0xFFFF=DSP PV power limit, 0xFFFE=DSP PV power percentage limit
+    GoodweNumberEntityDescription(
+        key="ac_active_limit_flag",
+        translation_key="ac_active_limit_flag",
+        icon="mdi:current-ac",
+        entity_category=EntityCategory.CONFIG,
+        native_step=1,
+        native_min_value=0,
+        native_max_value=1000,
+        getter=lambda inv: inv.read_setting("ac_active_limit_flag"),
+        mapper=lambda v: v if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("ac_active_limit_flag", int(val)),
+        filter=lambda inv: True,
+    ),
     # TOU (Time of Use) Slot Parameters (ARM fw >= 19 for slots 1-4, >= 22 for 5-8)
     # Param1 and Param2 for each slot (meaning depends on work week mode)
 )

@@ -87,6 +87,28 @@ SWITCHES = (
         setting="peak_shaving_enabled",
         polling_interval=30,
     ),
+    GoodweSwitchEntityDescription(
+        key="eco_mode_enable",
+        translation_key="eco_mode_enable",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="eco_mode_enable",
+        polling_interval=30,
+    ),
+    GoodweSwitchEntityDescription(
+        key="pv_sell_first",
+        translation_key="pv_sell_first",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="pv_sell_first",
+    ),
+    GoodweSwitchEntityDescription(
+        key="anti_backflow_function",
+        translation_key="anti_backflow_function",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="anti_backflow_function",
+    ),
 )
 
 
