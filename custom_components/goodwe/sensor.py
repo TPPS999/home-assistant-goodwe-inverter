@@ -46,7 +46,7 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_NEG_PRICE_ENABLED, DOMAIN
 from .coordinator import GoodweConfigEntry, GoodweUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -191,6 +191,15 @@ async def async_setup_entry(
         for sensor in inverter.sensors()
     )
 
+    # Negative price plan mask sensors (if enabled)
+    if config_entry.options.get(CONF_NEG_PRICE_ENABLED, False):
+        entities.extend([
+            NegPriceMaskSensor(coordinator, device_info, inverter, "sell_today"),
+            NegPriceMaskSensor(coordinator, device_info, inverter, "sell_tomorrow"),
+            NegPriceMaskSensor(coordinator, device_info, inverter, "buy_today"),
+            NegPriceMaskSensor(coordinator, device_info, inverter, "buy_tomorrow"),
+        ])
+
     async_add_entities(entities)
 
 
@@ -289,3 +298,58 @@ class InverterSensor(CoordinatorEntity[GoodweUpdateCoordinator], SensorEntity):
         if self._sensor.id_ in DAILY_RESET and self._stop_reset is not None:
             self._stop_reset()
         await super().async_will_remove_from_hass()
+
+
+class NegPriceMaskSensor(CoordinatorEntity[GoodweUpdateCoordinator], SensorEntity):
+    """Sensor showing negative price plan bitmask (6 x U16 registers as JSON list)."""
+
+    # Register mapping
+    _REGISTER_NAMES = {
+        "sell_today": [f"neg_price_sell_today_{i}" for i in range(1, 7)],
+        "sell_tomorrow": [f"neg_price_sell_tomorrow_{i}" for i in range(1, 7)],
+        "buy_today": [f"neg_price_buy_today_{i}" for i in range(1, 7)],
+        "buy_tomorrow": [f"neg_price_buy_tomorrow_{i}" for i in range(1, 7)],
+    }
+
+    def __init__(
+        self,
+        coordinator: GoodweUpdateCoordinator,
+        device_info: DeviceInfo,
+        inverter: Inverter,
+        mask_type: str,
+    ) -> None:
+        """Initialize a negative price mask sensor."""
+        super().__init__(coordinator)
+        self._mask_type = mask_type
+        self._inverter = inverter
+        self._attr_name = f"Neg Price {mask_type.replace('_', ' ').title()} Mask"
+        self._attr_unique_id = f"{DOMAIN}-neg_price_{mask_type}_mask-{inverter.serial_number}"
+        self._attr_device_info = device_info
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:clock-time-eight-outline"
+        # No unit, state class, or device class - this is discrete data (JSON array)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the mask as JSON array of 6 integers."""
+        try:
+            reg_names = self._REGISTER_NAMES[self._mask_type]
+            # Read from coordinator's cached data
+            masks = []
+            for reg_name in reg_names:
+                val = self.coordinator.data.get(reg_name)
+                if val is None:
+                    return None  # Data not available
+                masks.append(int(val))
+
+            import json
+            return json.dumps(masks)
+        except Exception as err:
+            _LOGGER.debug("Failed to read %s mask: %s", self._mask_type, err)
+            return None
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        # Available if coordinator has data
+        return self.coordinator.last_update_success

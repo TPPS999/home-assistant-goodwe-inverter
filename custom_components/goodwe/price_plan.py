@@ -12,42 +12,33 @@ Registers 47785-47812 layout:
   47800: buy_switch        (0=disabled, 1=charge only, 2=charge+positive sell)
   47801-47806: buy_today_1..6
   47807-47812: buy_tomorrow_1..6
+
+Architecture:
+  - GoodWe integration: provides low-level service to write masks + midnight rollover
+  - Price optimizer integration (external): fetches prices, builds masks, calls service
+  - Midnight rollover: copies tomorrow → today at 00:00:30 daily
 """
 from __future__ import annotations
 
-import asyncio
+import json
 import logging
-from datetime import date, datetime, timedelta, time
-from typing import Any
+from datetime import date, timedelta
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_DEVICE_ID,
     CONF_NEG_PRICE_ENABLED,
     DOMAIN,
     SERVICE_SET_NEG_PRICE_PLAN,
-    SERVICE_CONFIGURE_NEG_PRICE_PLAN,
-    SERVICE_UPDATE_NEG_PRICE_PLANS,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# PSE API constants
-PSE_API_URL = "https://api.raporty.pse.pl/api/rce-pln"
-PSE_RETRY_START_HOUR = 14  # Start retry at 14:00
-PSE_RETRY_START_MINUTE = 30  # Actually start at 14:30
-PSE_RETRY_INTERVAL_MINUTES = 30  # Retry every 30 minutes
-
-# Key for storing price plan config per entry in hass.data[DOMAIN]
-NEG_PRICE_CONFIG_KEY = "neg_price_config"
 
 # Register names used for writing
 _SELL_TODAY_REGS = [f"neg_price_sell_today_{i}" for i in range(1, 7)]
@@ -98,117 +89,6 @@ def encode_rtc_date(d: date) -> int:
     return (d.month << 8) | d.day
 
 
-async def _fetch_pse_prices(hass: HomeAssistant, business_date: date) -> list[float] | None:
-    """Fetch RCE PLN prices from PSE API for a given date.
-
-    Returns list of 96 prices (15-min slots) in PLN/MWh, or None if fetch fails.
-    """
-    session = async_get_clientsession(hass)
-    date_str = business_date.strftime('%Y-%m-%d')
-    params = {"$filter": f"business_date eq '{date_str}'"}
-
-    try:
-        async with session.get(PSE_API_URL, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            if resp.status != 200:
-                _LOGGER.error("PSE API returned status %d for date %s", resp.status, date_str)
-                return None
-
-            data = await resp.json()
-            values = data.get("value", [])
-
-            if not values:
-                _LOGGER.debug("PSE API returned no data for date %s (likely future date)", date_str)
-                return None
-
-            # Extract rce_pln prices (should be 96 records for a full day)
-            prices = [float(item["rce_pln"]) for item in values]
-
-            if len(prices) != 96:
-                _LOGGER.warning(
-                    "PSE API returned %d records for %s, expected 96. Using partial data.",
-                    len(prices), date_str
-                )
-
-            _LOGGER.debug("Fetched %d prices from PSE API for %s (min=%.2f, max=%.2f PLN/MWh)",
-                         len(prices), date_str, min(prices) if prices else 0, max(prices) if prices else 0)
-            return prices
-
-    except asyncio.TimeoutError:
-        _LOGGER.error("Timeout fetching PSE API for date %s", date_str)
-        return None
-    except aiohttp.ClientError as err:
-        _LOGGER.error("HTTP error fetching PSE API for date %s: %s", date_str, err)
-        return None
-    except (KeyError, ValueError, TypeError) as err:
-        _LOGGER.error("Error parsing PSE API response for date %s: %s", date_str, err)
-        return None
-
-
-def _extract_prices(hass: HomeAssistant, entity_id: str, attribute: str) -> list[float] | None:
-    """Extract a price list from a HA entity attribute or state.
-
-    Supports:
-    - Nordpool/Tibber style: attribute is a list of dicts with 'value', 'price', or 'v' key
-    - Generic list attribute: list of numeric values
-    - Single numeric state (repeated for all 96 slots as fallback)
-
-    Returns list of floats or None if extraction fails.
-    """
-    state = hass.states.get(entity_id)
-    if state is None:
-        _LOGGER.warning("Price entity '%s' not found in HA state.", entity_id)
-        return None
-
-    attr_val = state.attributes.get(attribute)
-    if attr_val is not None and isinstance(attr_val, list) and len(attr_val) > 0:
-        prices: list[float] = []
-        for item in attr_val:
-            if isinstance(item, dict):
-                # Nordpool/Tibber: {"start": ..., "end": ..., "value": 1.23}
-                val = item.get("value") or item.get("price") or item.get("v")
-                if val is not None:
-                    try:
-                        prices.append(float(val))
-                    except (TypeError, ValueError):
-                        pass
-            else:
-                try:
-                    prices.append(float(item))
-                except (TypeError, ValueError):
-                    pass
-        if prices:
-            return prices
-
-    # Fallback: single numeric state value -> repeat for all 96 slots
-    try:
-        val = float(state.state)
-        _LOGGER.debug(
-            "Entity '%s' attribute '%s' not found or not a list; using state value %.4f for all slots.",
-            entity_id, attribute, val
-        )
-        return [val] * 96
-    except (ValueError, TypeError):
-        _LOGGER.warning(
-            "Cannot extract prices from entity '%s' attribute '%s' (state: %s).",
-            entity_id, attribute, state.state
-        )
-        return None
-
-
-async def _get_inverter_and_entry(hass: HomeAssistant, device_id: str):
-    """Return (inverter, entry) for a given device_id."""
-    device = dr.async_get(hass).async_get(device_id)
-    if device is None:
-        raise ValueError(f"Device {device_id} not found")
-    for entry_id, runtime_data in hass.data[DOMAIN].items():
-        if device.identifiers == runtime_data.device_info.get("identifiers"):
-            # Get the config entry to check neg_price_enabled
-            from homeassistant.config_entries import current_entry
-            entry = hass.config_entries.async_get_entry(entry_id)
-            return runtime_data.inverter, entry
-    raise ValueError(f"Inverter for device id {device_id} not found")
-
-
 async def _write_plan(inverter, today: date, sell_masks: list[int] | None, sell_tomorrow_masks: list[int] | None,
                       buy_switch: int | None, buy_masks: list[int] | None, buy_tomorrow_masks: list[int] | None,
                       enable: bool | None) -> None:
@@ -240,109 +120,6 @@ async def _write_plan(inverter, today: date, sell_masks: list[int] | None, sell_
             await inverter.write_setting(reg, val)
 
 
-async def _update_from_config(hass: HomeAssistant, inverter, config: dict, runtime_data=None) -> None:
-    """Read current prices from configured sources and write plan to inverter.
-
-    Supports two source types:
-    - "entity": read from HA entity attributes (Nordpool/Tibber/etc)
-    - "rce_warsaw": fetch from PSE API (automatic, 15-min granularity)
-
-    Args:
-        runtime_data: optional runtime_data object to cache prices for midnight rollover
-    """
-    today = date.today()
-    tomorrow = today + timedelta(days=1)
-
-    sell_masks = None
-    sell_tomorrow_masks = None
-    buy_masks = None
-    buy_tomorrow_masks = None
-
-    today_prices_cache = None
-    tomorrow_prices_cache = None
-
-    source_type = config.get("source_type", "entity")
-    sell_threshold = float(config.get("sell_threshold", 0.0))
-    flip_sell = bool(config.get("flip_sell", False))
-    buy_threshold = float(config.get("buy_threshold", 0.0))
-    flip_buy = bool(config.get("flip_buy", False))
-    buy_switch = config.get("buy_switch")
-
-    if source_type == "rce_warsaw":
-        # Fetch from PSE API (RCE Warsaw)
-        _LOGGER.debug("Fetching prices from PSE API (RCE Warsaw)")
-
-        today_prices = await _fetch_pse_prices(hass, today)
-        if today_prices:
-            # PSE returns 96 x 15-min slots, no need to specify slot_minutes
-            sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes=15)
-            _LOGGER.info("Built sell today mask from PSE API (%d prices)", len(today_prices))
-
-            # Use same prices for buy plan if enabled
-            if buy_switch is not None and buy_switch > 0:
-                buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes=15)
-                _LOGGER.info("Built buy today mask from PSE API (%d prices)", len(today_prices))
-
-            today_prices_cache = today_prices
-
-        tomorrow_prices = await _fetch_pse_prices(hass, tomorrow)
-        if tomorrow_prices:
-            sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes=15)
-            _LOGGER.info("Built sell tomorrow mask from PSE API (%d prices)", len(tomorrow_prices))
-
-            if buy_switch is not None and buy_switch > 0:
-                buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes=15)
-                _LOGGER.info("Built buy tomorrow mask from PSE API (%d prices)", len(tomorrow_prices))
-
-            tomorrow_prices_cache = tomorrow_prices
-        else:
-            _LOGGER.warning("PSE API: Tomorrow's prices not yet available (will retry later)")
-
-    else:  # source_type == "entity"
-        # Legacy: read from HA entities
-        slot_minutes = int(config.get("slot_minutes", 60))
-
-        sell_entity = config.get("sell_entity_id")
-        if sell_entity:
-            today_prices = _extract_prices(hass, sell_entity, config.get("sell_today_attribute", "raw_today"))
-            if today_prices:
-                sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes)
-                _LOGGER.debug("Built sell today mask from entity '%s': %s", sell_entity, sell_masks)
-                today_prices_cache = today_prices
-
-            tomorrow_prices = _extract_prices(hass, sell_entity, config.get("sell_tomorrow_attribute", "raw_tomorrow"))
-            if tomorrow_prices:
-                sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
-                _LOGGER.debug("Built sell tomorrow mask from entity '%s': %s", sell_entity, sell_tomorrow_masks)
-                tomorrow_prices_cache = tomorrow_prices
-
-        buy_entity = config.get("buy_entity_id")
-        if buy_entity:
-            today_prices = _extract_prices(hass, buy_entity, config.get("buy_today_attribute", "raw_today"))
-            if today_prices:
-                buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes)
-                _LOGGER.debug("Built buy today mask from entity '%s': %s", buy_entity, buy_masks)
-
-            tomorrow_prices = _extract_prices(hass, buy_entity, config.get("buy_tomorrow_attribute", "raw_tomorrow"))
-            if tomorrow_prices:
-                buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
-                _LOGGER.debug("Built buy tomorrow mask from entity '%s': %s", buy_entity, buy_tomorrow_masks)
-
-    # Cache prices for midnight rollover (yesterday's tomorrow becomes today's today)
-    if runtime_data is not None:
-        if today_prices_cache is not None:
-            setattr(runtime_data, "last_price_today", today_prices_cache)
-        if tomorrow_prices_cache is not None:
-            setattr(runtime_data, "last_price_tomorrow", tomorrow_prices_cache)
-
-    await _write_plan(
-        inverter, today,
-        sell_masks, sell_tomorrow_masks,
-        buy_switch, buy_masks, buy_tomorrow_masks,
-        enable=None,
-    )
-
-
 SERVICE_SET_NEG_PRICE_PLAN_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_ID): str,
     vol.Optional("neg_price_enable"): cv.boolean,
@@ -363,36 +140,13 @@ SERVICE_SET_NEG_PRICE_PLAN_SCHEMA = vol.Schema({
     vol.Optional("slot_minutes", default=60): vol.In([15, 30, 60]),
 })
 
-SERVICE_CONFIGURE_NEG_PRICE_PLAN_SCHEMA = vol.Schema({
-    vol.Required(ATTR_DEVICE_ID): str,
-    vol.Optional("source_type", default="entity"): vol.In(["entity", "rce_warsaw"]),
-    # Entity source fields (used when source_type="entity")
-    vol.Optional("sell_entity_id"): cv.entity_id,
-    vol.Optional("sell_today_attribute", default="raw_today"): str,
-    vol.Optional("sell_tomorrow_attribute", default="raw_tomorrow"): str,
-    vol.Optional("buy_entity_id"): cv.entity_id,
-    vol.Optional("buy_today_attribute", default="raw_today"): str,
-    vol.Optional("buy_tomorrow_attribute", default="raw_tomorrow"): str,
-    vol.Optional("slot_minutes", default=60): vol.In([15, 30, 60]),
-    # Common fields for all source types
-    vol.Optional("sell_threshold", default=0.0): vol.Coerce(float),
-    vol.Optional("flip_sell", default=False): cv.boolean,
-    vol.Optional("buy_threshold", default=0.0): vol.Coerce(float),
-    vol.Optional("flip_buy", default=False): cv.boolean,
-    vol.Optional("buy_switch", default=1): vol.In([0, 1, 2]),
-})
-
-SERVICE_UPDATE_NEG_PRICE_PLANS_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_DEVICE_ID): str,
-})
-
 
 async def _midnight_rollover(hass: HomeAssistant) -> None:
-    """Midnight rollover: copy yesterday's tomorrow prices to today.
+    """Midnight rollover: copy tomorrow masks → today masks.
 
-    At midnight (00:00), yesterday's "tomorrow" data becomes "today" data.
-    This handler uses cached prices from yesterday to build today's masks.
-    Tomorrow's data will be refilled at 14:30 by the auto-update task.
+    At midnight (00:00:30), yesterday's "tomorrow" data becomes "today" data.
+    This handler reads tomorrow mask sensors and writes them as today masks.
+    Tomorrow masks are cleared (will be refilled by price optimizer integration).
     """
     _LOGGER.debug("Midnight rollover task triggered")
 
@@ -403,89 +157,57 @@ async def _midnight_rollover(hass: HomeAssistant) -> None:
         if not entry or not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
             continue
 
-        config = getattr(runtime_data, NEG_PRICE_CONFIG_KEY, None)
-        if not config:
-            continue
-
         try:
-            # Get yesterday's tomorrow prices (now they are today's prices)
-            yesterday_tomorrow_prices = getattr(runtime_data, "last_price_tomorrow", None)
-            if yesterday_tomorrow_prices is None:
+            inverter = runtime_data.inverter
+
+            # Read tomorrow masks from sensors
+            sell_tomorrow_entity = f"sensor.{runtime_data.device_info['name'].lower().replace(' ', '_')}_neg_price_sell_tomorrow_mask"
+            buy_tomorrow_entity = f"sensor.{runtime_data.device_info['name'].lower().replace(' ', '_')}_neg_price_buy_tomorrow_mask"
+
+            sell_tomorrow_state = hass.states.get(sell_tomorrow_entity)
+            buy_tomorrow_state = hass.states.get(buy_tomorrow_entity)
+
+            if sell_tomorrow_state is None or sell_tomorrow_state.state == "unavailable":
                 _LOGGER.debug(
-                    "No cached tomorrow prices for midnight rollover (entry %s), skipping. "
-                    "Today's data will be fetched at 14:30 auto-update.",
+                    "No sell tomorrow mask available for midnight rollover (entry %s), skipping.",
                     entry_id
                 )
                 continue
 
-            # Build masks for today using yesterday's tomorrow prices
-            source_type = config.get("source_type", "entity")
-            sell_threshold = float(config.get("sell_threshold", 0.0))
-            flip_sell = bool(config.get("flip_sell", False))
-            buy_threshold = float(config.get("buy_threshold", 0.0))
-            flip_buy = bool(config.get("flip_buy", False))
-            buy_switch = config.get("buy_switch", 1)
+            # Parse JSON masks
+            try:
+                sell_masks = json.loads(sell_tomorrow_state.state)
+                buy_masks = json.loads(buy_tomorrow_state.state) if buy_tomorrow_state and buy_tomorrow_state.state != "unavailable" else [0, 0, 0, 0, 0, 0]
+            except (json.JSONDecodeError, ValueError) as err:
+                _LOGGER.error("Failed to parse tomorrow masks for entry %s: %s", entry_id, err)
+                continue
 
-            slot_minutes = 15 if source_type == "rce_warsaw" else int(config.get("slot_minutes", 60))
+            # Get buy_switch from inverter
+            buy_switch_val = await inverter.read_setting("neg_price_buy_switch")
 
-            sell_masks = build_mask(yesterday_tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
-            buy_masks = None
-            if buy_switch is not None and buy_switch > 0:
-                buy_masks = build_mask(yesterday_tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
-
-            # Write as today's masks (don't touch tomorrow - it will be filled at 14:30)
+            # Write tomorrow → today
             await _write_plan(
-                runtime_data.inverter, today,
+                inverter, today,
                 sell_masks=sell_masks,
-                sell_tomorrow_masks=None,  # Leave tomorrow empty until 14:30 auto-update
-                buy_switch=buy_switch,
-                buy_masks=buy_masks,
-                buy_tomorrow_masks=None,
+                sell_tomorrow_masks=[0, 0, 0, 0, 0, 0],  # Clear tomorrow (will be refilled by optimizer)
+                buy_switch=buy_switch_val,
+                buy_masks=buy_masks if buy_switch_val > 0 else None,
+                buy_tomorrow_masks=[0, 0, 0, 0, 0, 0] if buy_switch_val > 0 else None,
                 enable=None,
             )
 
-            # Update cache: yesterday's tomorrow is now today
-            setattr(runtime_data, "last_price_today", yesterday_tomorrow_prices)
-            setattr(runtime_data, "last_price_tomorrow", None)  # Clear, will be refilled at 14:30
-
-            _LOGGER.info("Midnight rollover complete for entry %s (yesterday's tomorrow → today)", entry_id)
+            _LOGGER.info("Midnight rollover complete for entry %s (tomorrow → today)", entry_id)
 
         except Exception as err:
             _LOGGER.error("Failed midnight rollover for entry %s: %s", entry_id, err)
 
 
-async def _auto_update_rce_warsaw(hass: HomeAssistant) -> None:
-    """Auto-update task for RCE Warsaw price plans.
+def _setup_midnight_rollover(hass: HomeAssistant) -> None:
+    """Set up daily midnight rollover schedule.
 
-    Runs daily starting at 14:30, retries every 30 minutes until tomorrow's data appears.
+    Schedule: 00:00:30 daily (30 seconds after midnight)
+    Copies tomorrow masks → today masks via Modbus write
     """
-    _LOGGER.debug("RCE Warsaw auto-update task triggered")
-
-    for entry_id, runtime_data in hass.data[DOMAIN].items():
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if not entry or not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
-            continue
-
-        config = getattr(runtime_data, NEG_PRICE_CONFIG_KEY, None)
-        if not config or config.get("source_type") != "rce_warsaw":
-            continue
-
-        try:
-            _LOGGER.info("Auto-updating RCE Warsaw prices for entry %s", entry_id)
-            await _update_from_config(hass, runtime_data.inverter, config, runtime_data=runtime_data)
-        except Exception as err:
-            _LOGGER.error("Failed to auto-update RCE Warsaw prices for entry %s: %s", entry_id, err)
-
-
-def _setup_auto_update_schedule(hass: HomeAssistant) -> None:
-    """Set up daily auto-update schedule for RCE Warsaw (PSE API) and midnight rollover.
-
-    Schedule:
-    - Midnight rollover: 00:00:30 daily (copy yesterday's tomorrow → today)
-    - PSE auto-update: 14:30 daily, retry every 30 minutes until tomorrow's data appears
-    - PSE publishes tomorrow's prices usually between 14:00-17:00
-    """
-    # Midnight rollover: copy yesterday's tomorrow → today at 00:00:30
     async_track_time_change(
         hass,
         lambda now: hass.async_create_task(_midnight_rollover(hass)),
@@ -494,22 +216,6 @@ def _setup_auto_update_schedule(hass: HomeAssistant) -> None:
         second=[30],
     )
     _LOGGER.info("Midnight rollover schedule configured (daily at 00:00:30)")
-
-    # Schedule at 14:30, 15:00, 15:30, ..., 23:30 (retry windows)
-    retry_minutes = list(range(PSE_RETRY_START_MINUTE, 60, PSE_RETRY_INTERVAL_MINUTES))  # [30]
-    retry_minutes.extend(list(range(0, 60, PSE_RETRY_INTERVAL_MINUTES)))  # [0, 30]
-
-    for minute in retry_minutes:
-        if minute >= PSE_RETRY_START_MINUTE or minute == 0:  # 14:30+ or every :00 after 15:00
-            async_track_time_change(
-                hass,
-                lambda now: hass.async_create_task(_auto_update_rce_warsaw(hass)),
-                hour=list(range(PSE_RETRY_START_HOUR, 24)),  # 14:00-23:00
-                minute=[minute],
-                second=[0],
-            )
-
-    _LOGGER.info("RCE Warsaw auto-update schedule configured (daily from 14:30, every 30 min)")
 
 
 async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
@@ -575,100 +281,20 @@ async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
         )
         _LOGGER.info("Negative price plan written to inverter %s.", device_id)
 
-    async def async_configure_neg_price_plan(call: ServiceCall) -> None:
-        """Service: save neg price plan config and apply immediately."""
-        device_id = call.data[ATTR_DEVICE_ID]
-        inverter, entry_id = await _find_inverter_for_device(device_id)
-
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry and not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
-            _LOGGER.warning(
-                "Negative price plan feature not enabled for entry %s. "
-                "Enable it in integration options to activate automatic updates.",
-                entry_id,
-            )
-
-        config = {
-            "source_type": call.data.get("source_type", "entity"),
-            "sell_entity_id": call.data.get("sell_entity_id"),
-            "sell_today_attribute": call.data.get("sell_today_attribute", "raw_today"),
-            "sell_tomorrow_attribute": call.data.get("sell_tomorrow_attribute", "raw_tomorrow"),
-            "sell_threshold": call.data.get("sell_threshold", 0.0),
-            "flip_sell": call.data.get("flip_sell", False),
-            "buy_entity_id": call.data.get("buy_entity_id"),
-            "buy_today_attribute": call.data.get("buy_today_attribute", "raw_today"),
-            "buy_tomorrow_attribute": call.data.get("buy_tomorrow_attribute", "raw_tomorrow"),
-            "buy_threshold": call.data.get("buy_threshold", 0.0),
-            "flip_buy": call.data.get("flip_buy", False),
-            "buy_switch": call.data.get("buy_switch", 1),
-            "slot_minutes": call.data.get("slot_minutes", 60),
-        }
-
-        # Store config in hass.data under the entry
-        runtime_data = hass.data[DOMAIN].get(entry_id)
-        if runtime_data is not None:
-            if not hasattr(runtime_data, "__dict__"):
-                _LOGGER.error("runtime_data does not support attribute storage.")
-                return
-            setattr(runtime_data, NEG_PRICE_CONFIG_KEY, config)
-            _LOGGER.info("Neg price plan config saved for entry %s: %s", entry_id, config)
-
-        # Apply immediately
-        await _update_from_config(hass, inverter, config, runtime_data=runtime_data)
-        _LOGGER.info("Negative price plan configured and applied for device %s.", device_id)
-
-    async def async_update_neg_price_plans(call: ServiceCall) -> None:
-        """Service: re-read prices and update plan registers for all (or one) configured inverters."""
-        target_device_id = call.data.get(ATTR_DEVICE_ID)
-
-        for entry_id, runtime_data in hass.data[DOMAIN].items():
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
-                continue
-
-            config = getattr(runtime_data, NEG_PRICE_CONFIG_KEY, None)
-            if config is None:
-                continue
-
-            if target_device_id is not None:
-                # Filter to specific device if requested
-                device = dr.async_get(hass).async_get(target_device_id)
-                if device is None or device.identifiers != runtime_data.device_info.get("identifiers"):
-                    continue
-
-            try:
-                await _update_from_config(hass, runtime_data.inverter, config, runtime_data=runtime_data)
-                _LOGGER.info("Neg price plan updated for entry %s.", entry_id)
-            except Exception as err:
-                _LOGGER.error("Failed to update neg price plan for entry %s: %s", entry_id, err)
-
     hass.services.async_register(
         DOMAIN,
         SERVICE_SET_NEG_PRICE_PLAN,
         async_set_neg_price_plan,
         schema=SERVICE_SET_NEG_PRICE_PLAN_SCHEMA,
     )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_CONFIGURE_NEG_PRICE_PLAN,
-        async_configure_neg_price_plan,
-        schema=SERVICE_CONFIGURE_NEG_PRICE_PLAN_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_UPDATE_NEG_PRICE_PLANS,
-        async_update_neg_price_plans,
-        schema=SERVICE_UPDATE_NEG_PRICE_PLANS_SCHEMA,
-    )
 
-    # Set up auto-update schedule for RCE Warsaw (PSE API)
-    _setup_auto_update_schedule(hass)
+    # Set up midnight rollover schedule
+    _setup_midnight_rollover(hass)
 
     _LOGGER.debug("Negative price plan services registered.")
 
 
 async def async_unload_neg_price_services(hass: HomeAssistant) -> None:
     """Unload negative price plan services."""
-    for svc in (SERVICE_SET_NEG_PRICE_PLAN, SERVICE_CONFIGURE_NEG_PRICE_PLAN, SERVICE_UPDATE_NEG_PRICE_PLANS):
-        if hass.services.has_service(DOMAIN, svc):
-            hass.services.async_remove(DOMAIN, svc)
+    if hass.services.has_service(DOMAIN, SERVICE_SET_NEG_PRICE_PLAN):
+        hass.services.async_remove(DOMAIN, SERVICE_SET_NEG_PRICE_PLAN)
