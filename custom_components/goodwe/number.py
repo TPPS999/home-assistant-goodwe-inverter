@@ -216,6 +216,7 @@ NUMBERS = (
     # Peak Shaving parameters (TOU Slot 8 when in peak shaving mode 0xFC)
     # Note: In parallel systems, this value is sent to EACH inverter separately,
     # so total system power limit = value * number_of_inverters
+    # Register encoding: value stored in 10W units (register 3800 = 38000W = 38kW)
     GoodweNumberEntityDescription(
         key="peak_shaving_power_slot8",
         translation_key="peak_shaving_power_slot8",
@@ -223,12 +224,12 @@ NUMBERS = (
         entity_category=EntityCategory.CONFIG,
         device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
-        native_step=100,
+        native_step=10,
         native_min_value=-40000,
         native_max_value=40000,
         getter=lambda inv: inv.read_setting("tou_slot8_param1"),
-        mapper=lambda v: v if v is not None else 0,
-        setter=lambda inv, val: inv.write_setting("tou_slot8_param1", int(val)),
+        mapper=lambda v: v * 10 if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("tou_slot8_param1", int(val / 10)),
         filter=lambda inv: True,
     ),
     GoodweNumberEntityDescription(
@@ -318,7 +319,7 @@ async def async_setup_entry(
 class InverterNumberEntity(NumberEntity):
     """Inverter numeric setting entity."""
 
-    _attr_should_poll = False
+    _attr_should_poll = True
     _attr_has_entity_name = True
     entity_description: GoodweNumberEntityDescription
 
@@ -343,12 +344,22 @@ class InverterNumberEntity(NumberEntity):
 
     async def async_update(self) -> None:
         """Get the current value from inverter."""
-        value = await self.entity_description.getter(self._inverter)
-        self._attr_native_value = float(value)
+        try:
+            value = await self.entity_description.getter(self._inverter)
+            self._attr_native_value = float(self.entity_description.mapper(value))
+        except (InverterError, ValueError):
+            _LOGGER.debug("Failed to update number entity %s", self.entity_description.key)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set new value to inverter."""
         if self.entity_description.setter:
             await self.entity_description.setter(self._inverter, int(value))
-        self._attr_native_value = value
+            # Read back to confirm actual value accepted by inverter
+            try:
+                actual = await self.entity_description.getter(self._inverter)
+                self._attr_native_value = float(self.entity_description.mapper(actual))
+            except (InverterError, ValueError):
+                self._attr_native_value = value
+        else:
+            self._attr_native_value = value
         self.async_write_ha_state()
