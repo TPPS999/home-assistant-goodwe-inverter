@@ -240,12 +240,15 @@ async def _write_plan(inverter, today: date, sell_masks: list[int] | None, sell_
             await inverter.write_setting(reg, val)
 
 
-async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> None:
+async def _update_from_config(hass: HomeAssistant, inverter, config: dict, runtime_data=None) -> None:
     """Read current prices from configured sources and write plan to inverter.
 
     Supports two source types:
     - "entity": read from HA entity attributes (Nordpool/Tibber/etc)
     - "rce_warsaw": fetch from PSE API (automatic, 15-min granularity)
+
+    Args:
+        runtime_data: optional runtime_data object to cache prices for midnight rollover
     """
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -254,6 +257,9 @@ async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> No
     sell_tomorrow_masks = None
     buy_masks = None
     buy_tomorrow_masks = None
+
+    today_prices_cache = None
+    tomorrow_prices_cache = None
 
     source_type = config.get("source_type", "entity")
     sell_threshold = float(config.get("sell_threshold", 0.0))
@@ -277,6 +283,8 @@ async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> No
                 buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes=15)
                 _LOGGER.info("Built buy today mask from PSE API (%d prices)", len(today_prices))
 
+            today_prices_cache = today_prices
+
         tomorrow_prices = await _fetch_pse_prices(hass, tomorrow)
         if tomorrow_prices:
             sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes=15)
@@ -285,6 +293,8 @@ async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> No
             if buy_switch is not None and buy_switch > 0:
                 buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes=15)
                 _LOGGER.info("Built buy tomorrow mask from PSE API (%d prices)", len(tomorrow_prices))
+
+            tomorrow_prices_cache = tomorrow_prices
         else:
             _LOGGER.warning("PSE API: Tomorrow's prices not yet available (will retry later)")
 
@@ -298,11 +308,13 @@ async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> No
             if today_prices:
                 sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes)
                 _LOGGER.debug("Built sell today mask from entity '%s': %s", sell_entity, sell_masks)
+                today_prices_cache = today_prices
 
             tomorrow_prices = _extract_prices(hass, sell_entity, config.get("sell_tomorrow_attribute", "raw_tomorrow"))
             if tomorrow_prices:
                 sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
                 _LOGGER.debug("Built sell tomorrow mask from entity '%s': %s", sell_entity, sell_tomorrow_masks)
+                tomorrow_prices_cache = tomorrow_prices
 
         buy_entity = config.get("buy_entity_id")
         if buy_entity:
@@ -315,6 +327,13 @@ async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> No
             if tomorrow_prices:
                 buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
                 _LOGGER.debug("Built buy tomorrow mask from entity '%s': %s", buy_entity, buy_tomorrow_masks)
+
+    # Cache prices for midnight rollover (yesterday's tomorrow becomes today's today)
+    if runtime_data is not None:
+        if today_prices_cache is not None:
+            setattr(runtime_data, "last_price_today", today_prices_cache)
+        if tomorrow_prices_cache is not None:
+            setattr(runtime_data, "last_price_tomorrow", tomorrow_prices_cache)
 
     await _write_plan(
         inverter, today,
@@ -368,6 +387,73 @@ SERVICE_UPDATE_NEG_PRICE_PLANS_SCHEMA = vol.Schema({
 })
 
 
+async def _midnight_rollover(hass: HomeAssistant) -> None:
+    """Midnight rollover: copy yesterday's tomorrow prices to today.
+
+    At midnight (00:00), yesterday's "tomorrow" data becomes "today" data.
+    This handler uses cached prices from yesterday to build today's masks.
+    Tomorrow's data will be refilled at 14:30 by the auto-update task.
+    """
+    _LOGGER.debug("Midnight rollover task triggered")
+
+    today = date.today()
+
+    for entry_id, runtime_data in hass.data[DOMAIN].items():
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry or not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
+            continue
+
+        config = getattr(runtime_data, NEG_PRICE_CONFIG_KEY, None)
+        if not config:
+            continue
+
+        try:
+            # Get yesterday's tomorrow prices (now they are today's prices)
+            yesterday_tomorrow_prices = getattr(runtime_data, "last_price_tomorrow", None)
+            if yesterday_tomorrow_prices is None:
+                _LOGGER.debug(
+                    "No cached tomorrow prices for midnight rollover (entry %s), skipping. "
+                    "Today's data will be fetched at 14:30 auto-update.",
+                    entry_id
+                )
+                continue
+
+            # Build masks for today using yesterday's tomorrow prices
+            source_type = config.get("source_type", "entity")
+            sell_threshold = float(config.get("sell_threshold", 0.0))
+            flip_sell = bool(config.get("flip_sell", False))
+            buy_threshold = float(config.get("buy_threshold", 0.0))
+            flip_buy = bool(config.get("flip_buy", False))
+            buy_switch = config.get("buy_switch", 1)
+
+            slot_minutes = 15 if source_type == "rce_warsaw" else int(config.get("slot_minutes", 60))
+
+            sell_masks = build_mask(yesterday_tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
+            buy_masks = None
+            if buy_switch is not None and buy_switch > 0:
+                buy_masks = build_mask(yesterday_tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
+
+            # Write as today's masks (don't touch tomorrow - it will be filled at 14:30)
+            await _write_plan(
+                runtime_data.inverter, today,
+                sell_masks=sell_masks,
+                sell_tomorrow_masks=None,  # Leave tomorrow empty until 14:30 auto-update
+                buy_switch=buy_switch,
+                buy_masks=buy_masks,
+                buy_tomorrow_masks=None,
+                enable=None,
+            )
+
+            # Update cache: yesterday's tomorrow is now today
+            setattr(runtime_data, "last_price_today", yesterday_tomorrow_prices)
+            setattr(runtime_data, "last_price_tomorrow", None)  # Clear, will be refilled at 14:30
+
+            _LOGGER.info("Midnight rollover complete for entry %s (yesterday's tomorrow → today)", entry_id)
+
+        except Exception as err:
+            _LOGGER.error("Failed midnight rollover for entry %s: %s", entry_id, err)
+
+
 async def _auto_update_rce_warsaw(hass: HomeAssistant) -> None:
     """Auto-update task for RCE Warsaw price plans.
 
@@ -386,19 +472,29 @@ async def _auto_update_rce_warsaw(hass: HomeAssistant) -> None:
 
         try:
             _LOGGER.info("Auto-updating RCE Warsaw prices for entry %s", entry_id)
-            await _update_from_config(hass, runtime_data.inverter, config)
+            await _update_from_config(hass, runtime_data.inverter, config, runtime_data=runtime_data)
         except Exception as err:
             _LOGGER.error("Failed to auto-update RCE Warsaw prices for entry %s: %s", entry_id, err)
 
 
 def _setup_auto_update_schedule(hass: HomeAssistant) -> None:
-    """Set up daily auto-update schedule for RCE Warsaw (PSE API).
+    """Set up daily auto-update schedule for RCE Warsaw (PSE API) and midnight rollover.
 
     Schedule:
-    - Start at 14:30 daily
-    - Retry every 30 minutes (14:30, 15:00, 15:30, ..., 23:30)
+    - Midnight rollover: 00:00:30 daily (copy yesterday's tomorrow → today)
+    - PSE auto-update: 14:30 daily, retry every 30 minutes until tomorrow's data appears
     - PSE publishes tomorrow's prices usually between 14:00-17:00
     """
+    # Midnight rollover: copy yesterday's tomorrow → today at 00:00:30
+    async_track_time_change(
+        hass,
+        lambda now: hass.async_create_task(_midnight_rollover(hass)),
+        hour=[0],
+        minute=[0],
+        second=[30],
+    )
+    _LOGGER.info("Midnight rollover schedule configured (daily at 00:00:30)")
+
     # Schedule at 14:30, 15:00, 15:30, ..., 23:30 (retry windows)
     retry_minutes = list(range(PSE_RETRY_START_MINUTE, 60, PSE_RETRY_INTERVAL_MINUTES))  # [30]
     retry_minutes.extend(list(range(0, 60, PSE_RETRY_INTERVAL_MINUTES)))  # [0, 30]
@@ -518,7 +614,7 @@ async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
             _LOGGER.info("Neg price plan config saved for entry %s: %s", entry_id, config)
 
         # Apply immediately
-        await _update_from_config(hass, inverter, config)
+        await _update_from_config(hass, inverter, config, runtime_data=runtime_data)
         _LOGGER.info("Negative price plan configured and applied for device %s.", device_id)
 
     async def async_update_neg_price_plans(call: ServiceCall) -> None:
@@ -541,7 +637,7 @@ async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
                     continue
 
             try:
-                await _update_from_config(hass, runtime_data.inverter, config)
+                await _update_from_config(hass, runtime_data.inverter, config, runtime_data=runtime_data)
                 _LOGGER.info("Neg price plan updated for entry %s.", entry_id)
             except Exception as err:
                 _LOGGER.error("Failed to update neg price plan for entry %s: %s", entry_id, err)
