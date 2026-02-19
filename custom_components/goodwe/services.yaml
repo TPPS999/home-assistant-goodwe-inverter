@@ -50,3 +50,228 @@ set_parameter:
       required: true
       selector:
         object:
+
+set_neg_price_plan:
+  name: Set negative price plan
+  description: Write negative electric price plan registers immediately. Provide either pre-built masks (6 integers each) or price lists with threshold/flip options.
+  fields:
+    device_id:
+      name: Inverter device
+      description: ID of the inverter device
+      required: true
+      selector:
+        device:
+          integration: goodwe
+    neg_price_enable:
+      name: Enable negative price plan
+      description: Enable or disable the negative price plan feature on the inverter
+      required: false
+      selector:
+        boolean:
+    sell_today_prices:
+      name: Sell today prices
+      description: List of electricity sell prices for today (one value per slot_minutes interval)
+      required: false
+      selector:
+        object:
+    sell_tomorrow_prices:
+      name: Sell tomorrow prices
+      description: List of electricity sell prices for tomorrow
+      required: false
+      selector:
+        object:
+    sell_threshold:
+      name: Sell price threshold
+      description: Prices below this value are treated as negative (bit=1 in mask)
+      required: false
+      default: 0.0
+      selector:
+        number:
+          mode: box
+          step: 0.001
+    flip_sell:
+      name: Flip sell mask
+      description: Invert the sell mask (bit=1 for prices >= threshold instead of < threshold)
+      required: false
+      default: false
+      selector:
+        boolean:
+    buy_today_prices:
+      name: Buy today prices
+      description: List of electricity buy prices for today
+      required: false
+      selector:
+        object:
+    buy_tomorrow_prices:
+      name: Buy tomorrow prices
+      description: List of electricity buy prices for tomorrow
+      required: false
+      selector:
+        object:
+    buy_threshold:
+      name: Buy price threshold
+      description: Buy prices below this value are treated as favorable (bit=1 in mask)
+      required: false
+      default: 0.0
+      selector:
+        number:
+          mode: box
+          step: 0.001
+    flip_buy:
+      name: Flip buy mask
+      description: Invert the buy mask
+      required: false
+      default: false
+      selector:
+        boolean:
+    buy_switch:
+      name: Buy switch mode
+      description: "0: disabled, 1: charge battery only, 2: charge + allow positive sell"
+      required: false
+      selector:
+        select:
+          options:
+            - label: Disabled
+              value: '0'
+            - label: Charge battery only
+              value: '1'
+            - label: Charge + positive sell
+              value: '2'
+    slot_minutes:
+      name: Price slot duration (minutes)
+      description: Duration of each price entry in minutes (15, 30, or 60)
+      required: false
+      default: 60
+      selector:
+        select:
+          options:
+            - label: 15 minutes
+              value: '15'
+            - label: 30 minutes
+              value: '30'
+            - label: 60 minutes (hourly)
+              value: '60'
+
+configure_neg_price_plan:
+  name: Configure negative price plan (automatic)
+  description: Connect price sensor entities to the inverter. Prices are read automatically and masks are built from the configured thresholds. Enable in integration options first.
+  fields:
+    device_id:
+      name: Inverter device
+      description: ID of the inverter device
+      required: true
+      selector:
+        device:
+          integration: goodwe
+    sell_entity_id:
+      name: Sell price entity
+      description: Entity providing sell electricity prices (e.g. Nordpool sensor)
+      required: false
+      selector:
+        entity:
+    sell_today_attribute:
+      name: Sell today attribute
+      description: Attribute name for today's sell prices (default 'raw_today')
+      required: false
+      default: raw_today
+      selector:
+        text:
+    sell_tomorrow_attribute:
+      name: Sell tomorrow attribute
+      description: Attribute name for tomorrow's sell prices (default 'raw_tomorrow')
+      required: false
+      default: raw_tomorrow
+      selector:
+        text:
+    sell_threshold:
+      name: Sell price threshold
+      description: Sell prices below this value are treated as negative/favorable
+      required: false
+      default: 0.0
+      selector:
+        number:
+          mode: box
+          step: 0.001
+    flip_sell:
+      name: Flip sell mask
+      description: Invert sell mask (use when prices come in as negative numbers)
+      required: false
+      default: false
+      selector:
+        boolean:
+    buy_entity_id:
+      name: Buy price entity
+      description: Entity providing buy electricity prices (can be same as sell entity)
+      required: false
+      selector:
+        entity:
+    buy_today_attribute:
+      name: Buy today attribute
+      description: Attribute name for today's buy prices (default 'raw_today')
+      required: false
+      default: raw_today
+      selector:
+        text:
+    buy_tomorrow_attribute:
+      name: Buy tomorrow attribute
+      description: Attribute name for tomorrow's buy prices (default 'raw_tomorrow')
+      required: false
+      default: raw_tomorrow
+      selector:
+        text:
+    buy_threshold:
+      name: Buy price threshold
+      description: Buy prices below this value are treated as favorable charging periods
+      required: false
+      default: 0.0
+      selector:
+        number:
+          mode: box
+          step: 0.001
+    flip_buy:
+      name: Flip buy mask
+      description: Invert buy mask
+      required: false
+      default: false
+      selector:
+        boolean:
+    buy_switch:
+      name: Buy switch mode
+      description: "0: disabled, 1: charge battery only, 2: charge + allow positive sell"
+      required: false
+      default: 1
+      selector:
+        select:
+          options:
+            - label: Disabled
+              value: '0'
+            - label: Charge battery only
+              value: '1'
+            - label: Charge + positive sell
+              value: '2'
+    slot_minutes:
+      name: Price slot duration (minutes)
+      description: Duration of each input price entry (15, 30, or 60 minutes)
+      required: false
+      default: 60
+      selector:
+        select:
+          options:
+            - label: 15 minutes
+              value: '15'
+            - label: 30 minutes
+              value: '30'
+            - label: 60 minutes (hourly)
+              value: '60'
+
+update_neg_price_plans:
+  name: Update negative price plans now
+  description: Re-read prices from configured entities and update all inverter masks immediately. Useful to trigger manually after new prices become available.
+  fields:
+    device_id:
+      name: Inverter device (optional)
+      description: ID of a specific inverter device to update. If omitted, updates all configured inverters.
+      required: false
+      selector:
+        device:
+          integration: goodwe

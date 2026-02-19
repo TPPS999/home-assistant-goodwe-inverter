@@ -23,6 +23,7 @@ from .const import (
     CONF_KEEP_ALIVE,
     CONF_MODBUS_ID,
     CONF_MODEL_FAMILY,
+    CONF_NEG_PRICE_ENABLED,
     CONF_NETWORK_RETRIES,
     CONF_NETWORK_TIMEOUT,
     DEFAULT_MODBUS_ID,
@@ -52,6 +53,7 @@ OPTIONS_SCHEMA = vol.Schema(
         vol.Optional(CONF_MODBUS_ID): int,
         vol.Optional(CONF_NETWORK_RETRIES): cv.positive_int,
         vol.Optional(CONF_NETWORK_TIMEOUT): cv.positive_int,
+        vol.Optional(CONF_NEG_PRICE_ENABLED, default=False): cv.boolean,
     }
 )
 
@@ -85,6 +87,7 @@ class OptionsFlowHandler(OptionsFlow):
             CONF_NETWORK_TIMEOUT, DEFAULT_NETWORK_TIMEOUT
         )
         modbus_id = self.entry.options.get(CONF_MODBUS_ID, DEFAULT_MODBUS_ID)
+        neg_price_enabled = self.entry.options.get(CONF_NEG_PRICE_ENABLED, False)
 
         return self.async_show_form(
             step_id="init",
@@ -101,6 +104,7 @@ class OptionsFlowHandler(OptionsFlow):
                     CONF_NETWORK_RETRIES: network_retries,
                     CONF_NETWORK_TIMEOUT: network_timeout,
                     CONF_MODBUS_ID: modbus_id,
+                    CONF_NEG_PRICE_ENABLED: neg_price_enabled,
                 },
             ),
         )

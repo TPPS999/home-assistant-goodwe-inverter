@@ -119,6 +119,12 @@
       },
       "peak_shaving_soc_slot8": {
         "name": "Peak shaving SOC (Slot 8)"
+      },
+      "bat_feedpower_offset": {
+        "name": "Battery feed power offset"
+      },
+      "ac_active_limit_flag": {
+        "name": "AC active limit flag"
       }
     },
     "select": {
@@ -169,6 +175,15 @@
       },
       "fixed_power_factor_enable": {
         "name": "Fixed power factor enable"
+      },
+      "eco_mode_enable": {
+        "name": "Eco mode enable"
+      },
+      "pv_sell_first": {
+        "name": "PV sell first"
+      },
+      "anti_backflow_function": {
+        "name": "Anti-backflow function"
       }
     }
   },
@@ -182,7 +197,11 @@
           "model_family": "Protocol Family [ET|DT|ES]",
           "scan_interval": "Scan interval (s)",
           "network_retries": "Network retry attempts",
-          "network_timeout": "Network request timeout (s)"
+          "network_timeout": "Network request timeout (s)",
+          "neg_price_enabled": "Enable negative price plan (opt-in)"
+        },
+        "data_description": {
+          "neg_price_enabled": "Enable support for automatic negative electricity price plan management (registers 47785-47812). Requires compatible 2025 firmware."
         },
         "description": "Specify optional (network) settings",
         "title": "GoodWe optional settings"

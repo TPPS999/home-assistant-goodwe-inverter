@@ -18,6 +18,7 @@ from .const import (
     SERVICE_GET_PARAMETER,
     SERVICE_SET_PARAMETER,
 )
+from .price_plan import async_setup_neg_price_services, async_unload_neg_price_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,6 +94,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=SERVICE_SET_PARAMETER_SCHEMA,
     )
 
+    await async_setup_neg_price_services(hass)
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unload services for Goodwe integration."""
@@ -102,3 +105,5 @@ async def async_unload_services(hass: HomeAssistant) -> None:
 
     if hass.services.has_service(DOMAIN, SERVICE_SET_PARAMETER):
         hass.services.async_remove(DOMAIN, SERVICE_SET_PARAMETER)
+
+    await async_unload_neg_price_services(hass)

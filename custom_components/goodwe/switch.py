@@ -101,6 +101,7 @@ SWITCHES = (
         entity_category=EntityCategory.CONFIG,
         device_class=SwitchDeviceClass.SWITCH,
         setting="pv_sell_first",
+        polling_interval=30,
     ),
     GoodweSwitchEntityDescription(
         key="anti_backflow_function",
@@ -108,6 +109,7 @@ SWITCHES = (
         entity_category=EntityCategory.CONFIG,
         device_class=SwitchDeviceClass.SWITCH,
         setting="anti_backflow_function",
+        polling_interval=30,
     ),
 )
 
