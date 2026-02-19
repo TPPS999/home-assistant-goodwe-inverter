@@ -15,15 +15,19 @@ Registers 47785-47812 layout:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, time
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_DEVICE_ID,
@@ -35,6 +39,12 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# PSE API constants
+PSE_API_URL = "https://api.raporty.pse.pl/api/rce-pln"
+PSE_RETRY_START_HOUR = 14  # Start retry at 14:00
+PSE_RETRY_START_MINUTE = 30  # Actually start at 14:30
+PSE_RETRY_INTERVAL_MINUTES = 30  # Retry every 30 minutes
 
 # Key for storing price plan config per entry in hass.data[DOMAIN]
 NEG_PRICE_CONFIG_KEY = "neg_price_config"
@@ -86,6 +96,52 @@ def build_mask(prices: list[float], threshold: float, flip: bool, slot_minutes: 
 def encode_rtc_date(d: date) -> int:
     """Encode a date as (month << 8) | day for GoodWe RTC date registers."""
     return (d.month << 8) | d.day
+
+
+async def _fetch_pse_prices(hass: HomeAssistant, business_date: date) -> list[float] | None:
+    """Fetch RCE PLN prices from PSE API for a given date.
+
+    Returns list of 96 prices (15-min slots) in PLN/MWh, or None if fetch fails.
+    """
+    session = async_get_clientsession(hass)
+    date_str = business_date.strftime('%Y-%m-%d')
+    params = {"$filter": f"business_date eq '{date_str}'"}
+
+    try:
+        async with session.get(PSE_API_URL, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                _LOGGER.error("PSE API returned status %d for date %s", resp.status, date_str)
+                return None
+
+            data = await resp.json()
+            values = data.get("value", [])
+
+            if not values:
+                _LOGGER.debug("PSE API returned no data for date %s (likely future date)", date_str)
+                return None
+
+            # Extract rce_pln prices (should be 96 records for a full day)
+            prices = [float(item["rce_pln"]) for item in values]
+
+            if len(prices) != 96:
+                _LOGGER.warning(
+                    "PSE API returned %d records for %s, expected 96. Using partial data.",
+                    len(prices), date_str
+                )
+
+            _LOGGER.debug("Fetched %d prices from PSE API for %s (min=%.2f, max=%.2f PLN/MWh)",
+                         len(prices), date_str, min(prices) if prices else 0, max(prices) if prices else 0)
+            return prices
+
+    except asyncio.TimeoutError:
+        _LOGGER.error("Timeout fetching PSE API for date %s", date_str)
+        return None
+    except aiohttp.ClientError as err:
+        _LOGGER.error("HTTP error fetching PSE API for date %s: %s", date_str, err)
+        return None
+    except (KeyError, ValueError, TypeError) as err:
+        _LOGGER.error("Error parsing PSE API response for date %s: %s", date_str, err)
+        return None
 
 
 def _extract_prices(hass: HomeAssistant, entity_id: str, attribute: str) -> list[float] | None:
@@ -185,46 +241,80 @@ async def _write_plan(inverter, today: date, sell_masks: list[int] | None, sell_
 
 
 async def _update_from_config(hass: HomeAssistant, inverter, config: dict) -> None:
-    """Read current prices from configured entities and write plan to inverter."""
+    """Read current prices from configured sources and write plan to inverter.
+
+    Supports two source types:
+    - "entity": read from HA entity attributes (Nordpool/Tibber/etc)
+    - "rce_warsaw": fetch from PSE API (automatic, 15-min granularity)
+    """
     today = date.today()
+    tomorrow = today + timedelta(days=1)
 
     sell_masks = None
     sell_tomorrow_masks = None
     buy_masks = None
     buy_tomorrow_masks = None
 
-    sell_entity = config.get("sell_entity_id")
-    if sell_entity:
-        sell_threshold = float(config.get("sell_threshold", 0.0))
-        flip_sell = bool(config.get("flip_sell", False))
-        slot_minutes = int(config.get("slot_minutes", 60))
-
-        today_prices = _extract_prices(hass, sell_entity, config.get("sell_today_attribute", "raw_today"))
-        if today_prices:
-            sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes)
-            _LOGGER.debug("Built sell today mask from '%s': %s", sell_entity, sell_masks)
-
-        tomorrow_prices = _extract_prices(hass, sell_entity, config.get("sell_tomorrow_attribute", "raw_tomorrow"))
-        if tomorrow_prices:
-            sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
-            _LOGGER.debug("Built sell tomorrow mask from '%s': %s", sell_entity, sell_tomorrow_masks)
-
-    buy_entity = config.get("buy_entity_id")
+    source_type = config.get("source_type", "entity")
+    sell_threshold = float(config.get("sell_threshold", 0.0))
+    flip_sell = bool(config.get("flip_sell", False))
+    buy_threshold = float(config.get("buy_threshold", 0.0))
+    flip_buy = bool(config.get("flip_buy", False))
     buy_switch = config.get("buy_switch")
-    if buy_entity:
-        buy_threshold = float(config.get("buy_threshold", 0.0))
-        flip_buy = bool(config.get("flip_buy", False))
+
+    if source_type == "rce_warsaw":
+        # Fetch from PSE API (RCE Warsaw)
+        _LOGGER.debug("Fetching prices from PSE API (RCE Warsaw)")
+
+        today_prices = await _fetch_pse_prices(hass, today)
+        if today_prices:
+            # PSE returns 96 x 15-min slots, no need to specify slot_minutes
+            sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes=15)
+            _LOGGER.info("Built sell today mask from PSE API (%d prices)", len(today_prices))
+
+            # Use same prices for buy plan if enabled
+            if buy_switch is not None and buy_switch > 0:
+                buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes=15)
+                _LOGGER.info("Built buy today mask from PSE API (%d prices)", len(today_prices))
+
+        tomorrow_prices = await _fetch_pse_prices(hass, tomorrow)
+        if tomorrow_prices:
+            sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes=15)
+            _LOGGER.info("Built sell tomorrow mask from PSE API (%d prices)", len(tomorrow_prices))
+
+            if buy_switch is not None and buy_switch > 0:
+                buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes=15)
+                _LOGGER.info("Built buy tomorrow mask from PSE API (%d prices)", len(tomorrow_prices))
+        else:
+            _LOGGER.warning("PSE API: Tomorrow's prices not yet available (will retry later)")
+
+    else:  # source_type == "entity"
+        # Legacy: read from HA entities
         slot_minutes = int(config.get("slot_minutes", 60))
 
-        today_prices = _extract_prices(hass, buy_entity, config.get("buy_today_attribute", "raw_today"))
-        if today_prices:
-            buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes)
-            _LOGGER.debug("Built buy today mask from '%s': %s", buy_entity, buy_masks)
+        sell_entity = config.get("sell_entity_id")
+        if sell_entity:
+            today_prices = _extract_prices(hass, sell_entity, config.get("sell_today_attribute", "raw_today"))
+            if today_prices:
+                sell_masks = build_mask(today_prices, sell_threshold, flip_sell, slot_minutes)
+                _LOGGER.debug("Built sell today mask from entity '%s': %s", sell_entity, sell_masks)
 
-        tomorrow_prices = _extract_prices(hass, buy_entity, config.get("buy_tomorrow_attribute", "raw_tomorrow"))
-        if tomorrow_prices:
-            buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
-            _LOGGER.debug("Built buy tomorrow mask from '%s': %s", buy_entity, buy_tomorrow_masks)
+            tomorrow_prices = _extract_prices(hass, sell_entity, config.get("sell_tomorrow_attribute", "raw_tomorrow"))
+            if tomorrow_prices:
+                sell_tomorrow_masks = build_mask(tomorrow_prices, sell_threshold, flip_sell, slot_minutes)
+                _LOGGER.debug("Built sell tomorrow mask from entity '%s': %s", sell_entity, sell_tomorrow_masks)
+
+        buy_entity = config.get("buy_entity_id")
+        if buy_entity:
+            today_prices = _extract_prices(hass, buy_entity, config.get("buy_today_attribute", "raw_today"))
+            if today_prices:
+                buy_masks = build_mask(today_prices, buy_threshold, flip_buy, slot_minutes)
+                _LOGGER.debug("Built buy today mask from entity '%s': %s", buy_entity, buy_masks)
+
+            tomorrow_prices = _extract_prices(hass, buy_entity, config.get("buy_tomorrow_attribute", "raw_tomorrow"))
+            if tomorrow_prices:
+                buy_tomorrow_masks = build_mask(tomorrow_prices, buy_threshold, flip_buy, slot_minutes)
+                _LOGGER.debug("Built buy tomorrow mask from entity '%s': %s", buy_entity, buy_tomorrow_masks)
 
     await _write_plan(
         inverter, today,
@@ -256,23 +346,74 @@ SERVICE_SET_NEG_PRICE_PLAN_SCHEMA = vol.Schema({
 
 SERVICE_CONFIGURE_NEG_PRICE_PLAN_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_ID): str,
+    vol.Optional("source_type", default="entity"): vol.In(["entity", "rce_warsaw"]),
+    # Entity source fields (used when source_type="entity")
     vol.Optional("sell_entity_id"): cv.entity_id,
     vol.Optional("sell_today_attribute", default="raw_today"): str,
     vol.Optional("sell_tomorrow_attribute", default="raw_tomorrow"): str,
-    vol.Optional("sell_threshold", default=0.0): vol.Coerce(float),
-    vol.Optional("flip_sell", default=False): cv.boolean,
     vol.Optional("buy_entity_id"): cv.entity_id,
     vol.Optional("buy_today_attribute", default="raw_today"): str,
     vol.Optional("buy_tomorrow_attribute", default="raw_tomorrow"): str,
+    vol.Optional("slot_minutes", default=60): vol.In([15, 30, 60]),
+    # Common fields for all source types
+    vol.Optional("sell_threshold", default=0.0): vol.Coerce(float),
+    vol.Optional("flip_sell", default=False): cv.boolean,
     vol.Optional("buy_threshold", default=0.0): vol.Coerce(float),
     vol.Optional("flip_buy", default=False): cv.boolean,
     vol.Optional("buy_switch", default=1): vol.In([0, 1, 2]),
-    vol.Optional("slot_minutes", default=60): vol.In([15, 30, 60]),
 })
 
 SERVICE_UPDATE_NEG_PRICE_PLANS_SCHEMA = vol.Schema({
     vol.Optional(ATTR_DEVICE_ID): str,
 })
+
+
+async def _auto_update_rce_warsaw(hass: HomeAssistant) -> None:
+    """Auto-update task for RCE Warsaw price plans.
+
+    Runs daily starting at 14:30, retries every 30 minutes until tomorrow's data appears.
+    """
+    _LOGGER.debug("RCE Warsaw auto-update task triggered")
+
+    for entry_id, runtime_data in hass.data[DOMAIN].items():
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry or not entry.options.get(CONF_NEG_PRICE_ENABLED, False):
+            continue
+
+        config = getattr(runtime_data, NEG_PRICE_CONFIG_KEY, None)
+        if not config or config.get("source_type") != "rce_warsaw":
+            continue
+
+        try:
+            _LOGGER.info("Auto-updating RCE Warsaw prices for entry %s", entry_id)
+            await _update_from_config(hass, runtime_data.inverter, config)
+        except Exception as err:
+            _LOGGER.error("Failed to auto-update RCE Warsaw prices for entry %s: %s", entry_id, err)
+
+
+def _setup_auto_update_schedule(hass: HomeAssistant) -> None:
+    """Set up daily auto-update schedule for RCE Warsaw (PSE API).
+
+    Schedule:
+    - Start at 14:30 daily
+    - Retry every 30 minutes (14:30, 15:00, 15:30, ..., 23:30)
+    - PSE publishes tomorrow's prices usually between 14:00-17:00
+    """
+    # Schedule at 14:30, 15:00, 15:30, ..., 23:30 (retry windows)
+    retry_minutes = list(range(PSE_RETRY_START_MINUTE, 60, PSE_RETRY_INTERVAL_MINUTES))  # [30]
+    retry_minutes.extend(list(range(0, 60, PSE_RETRY_INTERVAL_MINUTES)))  # [0, 30]
+
+    for minute in retry_minutes:
+        if minute >= PSE_RETRY_START_MINUTE or minute == 0:  # 14:30+ or every :00 after 15:00
+            async_track_time_change(
+                hass,
+                lambda now: hass.async_create_task(_auto_update_rce_warsaw(hass)),
+                hour=list(range(PSE_RETRY_START_HOUR, 24)),  # 14:00-23:00
+                minute=[minute],
+                second=[0],
+            )
+
+    _LOGGER.info("RCE Warsaw auto-update schedule configured (daily from 14:30, every 30 min)")
 
 
 async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
@@ -352,6 +493,7 @@ async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
             )
 
         config = {
+            "source_type": call.data.get("source_type", "entity"),
             "sell_entity_id": call.data.get("sell_entity_id"),
             "sell_today_attribute": call.data.get("sell_today_attribute", "raw_today"),
             "sell_tomorrow_attribute": call.data.get("sell_tomorrow_attribute", "raw_tomorrow"),
@@ -422,6 +564,10 @@ async def async_setup_neg_price_services(hass: HomeAssistant) -> None:
         async_update_neg_price_plans,
         schema=SERVICE_UPDATE_NEG_PRICE_PLANS_SCHEMA,
     )
+
+    # Set up auto-update schedule for RCE Warsaw (PSE API)
+    _setup_auto_update_schedule(hass)
+
     _LOGGER.debug("Negative price plan services registered.")
 
 

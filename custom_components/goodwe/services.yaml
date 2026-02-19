@@ -154,7 +154,7 @@ set_neg_price_plan:
 
 configure_neg_price_plan:
   name: Configure negative price plan (automatic)
-  description: Connect price sensor entities to the inverter. Prices are read automatically and masks are built from the configured thresholds. Enable in integration options first.
+  description: Configure automatic price plan updates from RCE Warsaw (PSE API) or custom entity. Prices are fetched/read automatically and masks are built from configured thresholds. Enable in integration options first.
   fields:
     device_id:
       name: Inverter device
@@ -163,6 +163,18 @@ configure_neg_price_plan:
       selector:
         device:
           integration: goodwe
+    source_type:
+      name: Price source type
+      description: "Choose price data source: RCE Warsaw (PSE API, automatic 15-min data) or Entity (manual entity like Nordpool)"
+      required: false
+      default: entity
+      selector:
+        select:
+          options:
+            - label: Entity (Nordpool/Tibber/custom)
+              value: entity
+            - label: RCE Warsaw (PSE API)
+              value: rce_warsaw
     sell_entity_id:
       name: Sell price entity
       description: Entity providing sell electricity prices (e.g. Nordpool sensor)
