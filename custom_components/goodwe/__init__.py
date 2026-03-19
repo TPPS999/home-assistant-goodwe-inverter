@@ -129,14 +129,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoodweConfigEntry) -> bo
     except InverterError as err:
         raise ConfigEntryNotReady from err
 
+    _fw = inverter.firmware or ""
+    _arm_fw = inverter.arm_firmware
+    _sw_version = f"{_fw} / {_arm_fw}" if _arm_fw else _fw
+    _sn = inverter.serial_number or ""
+    _hw_version = f"{_sn[5:8]} {_sn[0:5]}" if len(_sn) >= 8 else _sn
     device_info = DeviceInfo(
         configuration_url="https://www.semsportal.com",
         identifiers={(DOMAIN, inverter.serial_number)},
         name=entry.title,
         manufacturer="GoodWe",
         model=inverter.model_name,
-        sw_version=f"{inverter.firmware} / {inverter.arm_firmware}",
-        hw_version=f"{inverter.serial_number[5:8]} {inverter.serial_number[0:5]}",
+        sw_version=_sw_version,
+        hw_version=_hw_version,
     )
 
     # Create update coordinator
