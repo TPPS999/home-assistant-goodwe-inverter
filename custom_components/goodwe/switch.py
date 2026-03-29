@@ -111,6 +111,30 @@ SWITCHES = (
         setting="anti_backflow_function",
         polling_interval=30,
     ),
+    # HCA EV charger switches
+    GoodweSwitchEntityDescription(
+        key="charge_enabled",
+        translation_key="charge_enabled",
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="charge_enabled",
+        polling_interval=5,
+    ),
+    GoodweSwitchEntityDescription(
+        key="plug_and_charge",
+        translation_key="plug_and_charge",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="plug_and_charge",
+        polling_interval=30,
+    ),
+    GoodweSwitchEntityDescription(
+        key="dynamic_load_mgmt",
+        translation_key="dynamic_load_mgmt",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="dynamic_load_mgmt",
+        polling_interval=30,
+    ),
 )
 
 

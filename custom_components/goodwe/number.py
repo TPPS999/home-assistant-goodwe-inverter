@@ -313,6 +313,40 @@ for slot in range(1, 9):
 
 NUMBERS = NUMBERS + tuple(_TOU_NUMBERS)
 
+# HCA EV charger number entities
+_HCA_NUMBERS = (
+    GoodweNumberEntityDescription(
+        key="max_charging_power",
+        translation_key="max_charging_power",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_step=0.1,
+        native_min_value=1.4,
+        native_max_value=22.0,
+        getter=lambda inv: inv.read_setting("max_charging_power"),
+        mapper=lambda v: v if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("max_charging_power", val),
+        filter=lambda inv: True,
+    ),
+    GoodweNumberEntityDescription(
+        key="grid_power_limit",
+        translation_key="grid_power_limit",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_step=0.1,
+        native_min_value=1.4,
+        native_max_value=22.0,
+        getter=lambda inv: inv.read_setting("grid_power_limit"),
+        mapper=lambda v: v if v is not None else 0,
+        setter=lambda inv, val: inv.write_setting("grid_power_limit", val),
+        filter=lambda inv: True,
+    ),
+)
+
+NUMBERS = NUMBERS + _HCA_NUMBERS
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
