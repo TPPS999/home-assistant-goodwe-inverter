@@ -44,6 +44,10 @@ OPERATION_MODE = SelectEntityDescription(
 )
 
 
+_HCA_CHARGING_MODE_OPTIONS = ["Fast charge", "PV only", "PV + battery"]
+_HCA_CHARGING_MODE_VALUES = {v: i for i, v in enumerate(_HCA_CHARGING_MODE_OPTIONS)}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: GoodweConfigEntry,
@@ -52,6 +56,14 @@ async def async_setup_entry(
     """Set up the inverter select entities from a config entry."""
     inverter = config_entry.runtime_data.inverter
     device_info = config_entry.runtime_data.device_info
+
+    # HCA EV charger: advanced charging mode select
+    try:
+        mode_val = await inverter.read_setting("advanced_charging_mode")
+        current_option = _HCA_CHARGING_MODE_OPTIONS[int(mode_val)] if mode_val is not None and int(mode_val) < 3 else _HCA_CHARGING_MODE_OPTIONS[0]
+        async_add_entities([HCAChargingModeEntity(device_info, inverter, current_option)])
+    except (InverterError, ValueError):
+        pass
 
     supported_modes = await inverter.get_operation_modes(True)
     # read current operating mode from the inverter
@@ -181,3 +193,26 @@ class InverterOperationModeEntity(SelectEntity):
                 await self._inverter.set_operation_mode(
                     operation_mode, self._eco_mode_power, self._eco_mode_soc
                 )
+
+
+class HCAChargingModeEntity(SelectEntity):
+    """Select entity for HCA EV charger advanced charging mode."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, device_info: DeviceInfo, inverter: Inverter, current_option: str) -> None:
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}advanced_charging_mode-{inverter.serial_number}"
+        self._attr_device_info = device_info
+        self._attr_name = "Charging Mode"
+        self._attr_options = _HCA_CHARGING_MODE_OPTIONS
+        self._attr_current_option = current_option
+        self._inverter = inverter
+
+    async def async_select_option(self, option: str) -> None:
+        value = _HCA_CHARGING_MODE_VALUES.get(option, 0)
+        await self._inverter.write_setting("advanced_charging_mode", value)
+        self._attr_current_option = option
+        self.async_write_ha_state()
