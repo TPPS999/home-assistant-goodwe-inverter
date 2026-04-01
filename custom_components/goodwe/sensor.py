@@ -19,6 +19,7 @@ from goodwe.sensor import (
     EnumH,
     EnumL,
 )
+from goodwe.hca import FaultBitmaskSensor, PowerSourceSensor
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -232,7 +233,7 @@ class InverterSensor(CoordinatorEntity[GoodweUpdateCoordinator], SensorEntity):
                 self.entity_description = ENUM_SENSOR
                 self._attr_options = list(sensor._labels.values())
             elif (
-                isinstance(sensor, (EnumBitmap4, EnumBitmap22))
+                isinstance(sensor, (EnumBitmap4, EnumBitmap22, FaultBitmaskSensor, PowerSourceSensor))
                 or sensor.id_ == "timestamp"
                 or sensor.__class__.__name__ in ("TimeOfDay", "WorkWeekV2", "MonthMask")
             ):
