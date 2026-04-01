@@ -125,9 +125,23 @@
       },
       "ac_active_limit_flag": {
         "name": "AC active limit flag"
+      },
+      "max_charging_power": {
+        "name": "Max charging power"
+      },
+      "grid_power_limit": {
+        "name": "Grid power limit"
       }
     },
     "select": {
+      "advanced_charging_mode": {
+        "name": "EV charging mode",
+        "state": {
+          "Fast charge": "Fast charge",
+          "PV only": "PV only",
+          "PV + battery": "PV + battery"
+        }
+      },
       "operation_mode": {
         "name": "Inverter operation mode",
         "state": {
@@ -184,6 +198,15 @@
       },
       "anti_backflow_function": {
         "name": "Anti-backflow function"
+      },
+      "charge_enabled": {
+        "name": "EV charge enabled"
+      },
+      "plug_and_charge": {
+        "name": "Plug and charge"
+      },
+      "dynamic_load_mgmt": {
+        "name": "Dynamic load management"
       }
     }
   },
