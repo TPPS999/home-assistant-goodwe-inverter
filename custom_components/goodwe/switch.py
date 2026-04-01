@@ -135,6 +135,22 @@ SWITCHES = (
         setting="dynamic_load_mgmt",
         polling_interval=30,
     ),
+    GoodweSwitchEntityDescription(
+        key="single_phase_switch",
+        translation_key="single_phase_switch",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="single_phase_switch",
+        polling_interval=30,
+    ),
+    GoodweSwitchEntityDescription(
+        key="min_power_enable",
+        translation_key="min_power_enable",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="min_power_enable",
+        polling_interval=30,
+    ),
 )
 
 

@@ -207,6 +207,12 @@
       },
       "dynamic_load_mgmt": {
         "name": "Dynamic load management"
+      },
+      "single_phase_switch": {
+        "name": "Single/3-phase switching"
+      },
+      "min_power_enable": {
+        "name": "Maintain minimum charging power"
       }
     }
   },
