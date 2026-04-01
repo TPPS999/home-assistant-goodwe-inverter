@@ -25,6 +25,9 @@
       "synchronize_clock": {
         "name": "Synchronize inverter clock"
       },
+      "synchronize_hca_clock": {
+        "name": "Synchronize EV charger clock"
+      },
       "start_inverter": {
         "name": "Start inverter"
       },
@@ -131,6 +134,39 @@
       },
       "grid_power_limit": {
         "name": "Grid power limit"
+      },
+      "household_breaker": {
+        "name": "Household breaker current"
+      },
+      "max_capacity": {
+        "name": "Max charging capacity"
+      },
+      "min_capacity": {
+        "name": "Min charging capacity"
+      },
+      "battery_discharge_soc_set": {
+        "name": "Battery discharge SOC limit"
+      },
+      "completion_time_set": {
+        "name": "Completion time"
+      },
+      "reservation_duration_set": {
+        "name": "Reservation duration"
+      },
+      "max_capacity_reservation_set": {
+        "name": "Max charging capacity (reservation)"
+      },
+      "min_capacity_reservation_set": {
+        "name": "Min charging capacity (reservation)"
+      },
+      "max_charging_power_reservation": {
+        "name": "Max charging power (reservation)"
+      },
+      "battery_discharge_soc_reservation": {
+        "name": "Battery discharge SOC (reservation)"
+      },
+      "completion_time_reservation_set": {
+        "name": "Completion time (reservation)"
       }
     },
     "select": {
@@ -140,6 +176,22 @@
           "Fast charge": "Fast charge",
           "PV only": "PV only",
           "PV + battery": "PV + battery"
+        }
+      },
+      "advanced_charging_mode_reservation": {
+        "name": "EV charging mode (reservation)",
+        "state": {
+          "Fast charge": "Fast charge",
+          "PV only": "PV only",
+          "PV + battery": "PV + battery"
+        }
+      },
+      "reservation_status_set": {
+        "name": "Reservation status",
+        "state": {
+          "Inactive": "Inactive",
+          "Single use": "Single use",
+          "Permanent": "Permanent"
         }
       },
       "operation_mode": {
@@ -213,6 +265,12 @@
       },
       "min_power_enable": {
         "name": "Maintain minimum charging power"
+      },
+      "ems_dispatch": {
+        "name": "EMS dispatch (reduce to minimum)"
+      },
+      "transparent_mode_set": {
+        "name": "Transparent mode (gateway)"
       }
     }
   },

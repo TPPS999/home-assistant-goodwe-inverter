@@ -151,6 +151,22 @@ SWITCHES = (
         setting="min_power_enable",
         polling_interval=30,
     ),
+    GoodweSwitchEntityDescription(
+        key="ems_dispatch",
+        translation_key="ems_dispatch",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="ems_dispatch",
+        polling_interval=30,
+    ),
+    GoodweSwitchEntityDescription(
+        key="transparent_mode_set",
+        translation_key="transparent_mode_set",
+        entity_category=EntityCategory.CONFIG,
+        device_class=SwitchDeviceClass.SWITCH,
+        setting="transparent_mode_set",
+        polling_interval=30,
+    ),
 )
 
 

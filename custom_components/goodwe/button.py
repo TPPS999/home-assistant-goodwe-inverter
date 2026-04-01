@@ -35,6 +35,13 @@ BUTTONS = (
         action=lambda inv: inv.write_setting("time", datetime.now()),
     ),
     GoodweButtonEntityDescription(
+        key="synchronize_hca_clock",
+        translation_key="synchronize_hca_clock",
+        entity_category=EntityCategory.CONFIG,
+        setting="hca_clock",
+        action=lambda inv: inv.write_setting("hca_clock", datetime.now()),
+    ),
+    GoodweButtonEntityDescription(
         key="start_inverter",
         translation_key="start_inverter",
         setting="start",

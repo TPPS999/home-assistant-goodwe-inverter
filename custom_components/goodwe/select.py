@@ -47,6 +47,9 @@ OPERATION_MODE = SelectEntityDescription(
 _HCA_CHARGING_MODE_OPTIONS = ["Fast charge", "PV only", "PV + battery"]
 _HCA_CHARGING_MODE_VALUES = {v: i for i, v in enumerate(_HCA_CHARGING_MODE_OPTIONS)}
 
+_HCA_RESERVATION_STATUS_OPTIONS = ["Inactive", "Single use", "Permanent"]
+_HCA_RESERVATION_STATUS_VALUES = {v: i for i, v in enumerate(_HCA_RESERVATION_STATUS_OPTIONS)}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -62,6 +65,22 @@ async def async_setup_entry(
         mode_val = await inverter.read_setting("advanced_charging_mode")
         current_option = _HCA_CHARGING_MODE_OPTIONS[int(mode_val)] if mode_val is not None and int(mode_val) < 3 else _HCA_CHARGING_MODE_OPTIONS[0]
         async_add_entities([HCAChargingModeEntity(device_info, inverter, current_option)])
+    except (InverterError, ValueError):
+        pass
+
+    # HCA EV charger: advanced charging mode for reservation
+    try:
+        mode_val = await inverter.read_setting("advanced_charging_mode_reservation")
+        current_option = _HCA_CHARGING_MODE_OPTIONS[int(mode_val)] if mode_val is not None and int(mode_val) < 3 else _HCA_CHARGING_MODE_OPTIONS[0]
+        async_add_entities([HCAChargingModeReservationEntity(device_info, inverter, current_option)])
+    except (InverterError, ValueError):
+        pass
+
+    # HCA EV charger: reservation status select
+    try:
+        status_val = await inverter.read_setting("reservation_status_set")
+        current_option = _HCA_RESERVATION_STATUS_OPTIONS[int(status_val)] if status_val is not None and int(status_val) < 3 else _HCA_RESERVATION_STATUS_OPTIONS[0]
+        async_add_entities([HCAReservationStatusEntity(device_info, inverter, current_option)])
     except (InverterError, ValueError):
         pass
 
@@ -214,5 +233,51 @@ class HCAChargingModeEntity(SelectEntity):
     async def async_select_option(self, option: str) -> None:
         value = _HCA_CHARGING_MODE_VALUES.get(option, 0)
         await self._inverter.write_setting("advanced_charging_mode", value)
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+
+class HCAChargingModeReservationEntity(SelectEntity):
+    """Select entity for HCA EV charger advanced charging mode (reservation)."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, device_info: DeviceInfo, inverter: Inverter, current_option: str) -> None:
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}advanced_charging_mode_reservation-{inverter.serial_number}"
+        self._attr_device_info = device_info
+        self._attr_translation_key = "advanced_charging_mode_reservation"
+        self._attr_options = _HCA_CHARGING_MODE_OPTIONS
+        self._attr_current_option = current_option
+        self._inverter = inverter
+
+    async def async_select_option(self, option: str) -> None:
+        value = _HCA_CHARGING_MODE_VALUES.get(option, 0)
+        await self._inverter.write_setting("advanced_charging_mode_reservation", value)
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+
+class HCAReservationStatusEntity(SelectEntity):
+    """Select entity for HCA EV charger reservation status."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, device_info: DeviceInfo, inverter: Inverter, current_option: str) -> None:
+        prefix = inverter.sensor_name_prefix if hasattr(inverter, 'sensor_name_prefix') else ""
+        self._attr_unique_id = f"{DOMAIN}-{prefix}reservation_status_set-{inverter.serial_number}"
+        self._attr_device_info = device_info
+        self._attr_translation_key = "reservation_status_set"
+        self._attr_options = _HCA_RESERVATION_STATUS_OPTIONS
+        self._attr_current_option = current_option
+        self._inverter = inverter
+
+    async def async_select_option(self, option: str) -> None:
+        value = _HCA_RESERVATION_STATUS_VALUES.get(option, 0)
+        await self._inverter.write_setting("reservation_status_set", value)
         self._attr_current_option = option
         self.async_write_ha_state()
