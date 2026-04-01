@@ -73,8 +73,8 @@ async def async_setup_entry(
         current_eco_power = abs(eco_mode.power) if eco_mode.power else 0
         current_eco_soc = eco_mode.soc if eco_mode.soc else 0
     except (InverterError, ValueError):
-        # Inverter model does not support this setting
-        _LOGGER.debug("Could not read inverter operation mode", exc_info=True)
+        # Inverter model does not support this setting (e.g. HCA EV charger)
+        _LOGGER.debug("Could not read inverter operation mode")
     else:
         entity = InverterOperationModeEntity(
             device_info,
